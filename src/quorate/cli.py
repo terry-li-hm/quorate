@@ -1,9 +1,10 @@
-"""CLI entry point using cyclopts."""
+"""CLI entry point using cyclopts — subcommand per mode."""
 
 from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Annotated
 
 import cyclopts
 from rich.console import Console
@@ -17,121 +18,202 @@ app = cyclopts.App(
 )
 
 
+# --- Shared parameter resolution ---
+
+
+def _resolve_question(question: str | None, prompt_file: Path | None) -> str:
+    if prompt_file:
+        return prompt_file.read_text().strip()
+    if not question:
+        Console().print("[red]No question provided.[/red]")
+        raise SystemExit(1)
+    return question
+
+
+def _resolve_effort(effort: str | None):
+    if not effort:
+        return None
+    from quorate.config import ReasoningEffort
+    try:
+        return ReasoningEffort(effort.lower())
+    except ValueError:
+        Console().print(f"[red]Invalid effort: {effort}. Use low/medium/high.[/red]")
+        raise SystemExit(1)
+
+
+# --- Presets: named council configurations ---
+
+PRESETS = {
+    "redteam": {
+        "description": "Adversarial stress-test — find what breaks.",
+        "context_prefix": (
+            "RED TEAM EXERCISE: Your job is to BREAK this plan, not improve it. "
+            "Every attack must be specific: 'When X happens, Y fails because Z.' "
+            "Find specific, concrete failure modes. Be adversarial, not constructive."
+        ),
+        "rounds": 1,
+    },
+    "premortem": {
+        "description": "Assume failure, write past-tense narratives.",
+        "context_prefix": (
+            "PRE-MORTEM EXERCISE: Assume this plan has ALREADY FAILED. It is 12 months later. "
+            "Write in first person, past tense: 'Here's what happened.' "
+            "No hedging words (might, could, possibly). Give a specific chain of events: "
+            "trigger → escalation → breakdown → consequence. "
+            "Include one decision we got wrong and one signal we ignored."
+        ),
+        "rounds": 1,
+    },
+    "oxford": {
+        "description": "Binary debate — structured FOR vs AGAINST.",
+        "context_prefix": (
+            "OXFORD DEBATE: This is a binary motion. Two sides will argue FOR and AGAINST. "
+            "You are assigned a side regardless of your personal view. Argue it convincingly. "
+            "Present 2-3 clear arguments with evidence. Concede what you must — "
+            "selective concession is persuasive, blanket denial is not."
+        ),
+        "rounds": 1,
+    },
+    "discuss": {
+        "description": "Open roundtable — no judge, conversational.",
+        "context_prefix": (
+            "ROUNDTABLE DISCUSSION: This is an open exploration, not a debate. "
+            "Riff on what others said — 'that reminds me of...' or 'the interesting thing is...' "
+            "Share analogies and surprising angles. No bullet points. "
+            "Think conference after-party, not panel presentation."
+        ),
+        "rounds": 1,
+        "no_judge": True,
+        "no_critic": True,
+    },
+}
+
+
+# --- Subcommands ---
+
+
 @app.default
-def main(
+def auto(
     question: str | None = None,
     *,
-    # Mode flags
-    quick: bool = False,
-    council: bool = False,
-    redteam: bool = False,
-    oxford: bool = False,
-    deep: bool = False,
-    # Context
-    context: str | None = None,
-    persona: str | None = None,
-    domain: str | None = None,
     prompt_file: Path | None = None,
-    # Deliberation
-    rounds: int = 1,
+    context: str | None = None,
+    timeout: float = 300,
     effort: str | None = None,
-    # Models
+    quiet: bool = False,
+) -> None:
+    """Auto-classify and deliberate (default when no subcommand given)."""
+    text = _resolve_question(question, prompt_file)
+    mode = asyncio.run(_classify(text))
+    Console(quiet=quiet).print(f"[dim]→ {mode}[/dim]\n")
+    # Re-dispatch
+    handler = {"quick": quick, "council": council, "redteam": _preset_cmd("redteam")}.get(mode, council)
+    handler(question=text, context=context, timeout=timeout, effort=effort, quiet=quiet)
+
+
+@app.command
+def quick(
+    question: str | None = None,
+    *,
+    prompt_file: Path | None = None,
+    context: str | None = None,
+    timeout: float = 300,
+    effort: str | None = None,
+    quiet: bool = False,
+) -> None:
+    """Parallel queries — all models answer independently."""
+    from quorate.modes.quick import run_quick
+    text = _resolve_question(question, prompt_file)
+    asyncio.run(run_quick(
+        text, context=context, timeout=timeout,
+        effort=_resolve_effort(effort), console=Console(quiet=quiet),
+    ))
+
+
+@app.command
+def council(
+    question: str | None = None,
+    *,
+    prompt_file: Path | None = None,
+    context: str | None = None,
+    rounds: int = 1,
+    deep: bool = False,
+    timeout: float = 300,
+    effort: str | None = None,
     judge_model: str | None = None,
     critic_model: str | None = None,
     no_critic: bool = False,
-    # Output
-    timeout: float = 120,
+    no_judge: bool = False,
+    domain: str | None = None,
+    persona: str | None = None,
     quiet: bool = False,
 ) -> None:
-    """Run a multi-model deliberation."""
-    console = Console(quiet=quiet)
+    """Full deliberation — blind phase, debate, judge synthesis, critique."""
+    from quorate.modes.council import run_council
+    text = _resolve_question(question, prompt_file)
+    if deep:
+        rounds = max(rounds, 2)
+    asyncio.run(run_council(
+        text, context=context, rounds=rounds, timeout=timeout,
+        effort=_resolve_effort(effort), judge_model=judge_model,
+        critic_model=critic_model, no_critic=no_critic or no_judge,
+        domain=domain, persona=persona, console=Console(quiet=quiet),
+    ))
 
-    # Resolve question
-    if prompt_file:
-        question = prompt_file.read_text().strip()
-    if not question:
-        console.print("[red]No question provided.[/red]")
-        raise SystemExit(1)
 
-    # Resolve effort
-    effort_enum = None
-    if effort:
-        from quorate.config import ReasoningEffort
-        try:
-            effort_enum = ReasoningEffort(effort.lower())
-        except ValueError:
-            console.print(f"[red]Invalid effort: {effort}. Use low/medium/high.[/red]")
-            raise SystemExit(1)
-
-    # Resolve mode
-    if quick:
-        mode = "quick"
-    elif council or deep:
-        mode = "council"
-        if deep:
-            rounds = max(rounds, 2)
-    elif redteam:
-        mode = "redteam"
-    elif oxford:
-        mode = "oxford"
-    else:
-        # Auto-classify
-        mode = asyncio.run(_classify(question))
-
-    console.print(f"[dim]Mode: {mode}[/dim]\n")
-
-    # Dispatch
-    if mode == "quick":
-        from quorate.modes.quick import run_quick
-        asyncio.run(run_quick(
-            question, context=context, timeout=timeout, effort=effort_enum, console=console
-        ))
-
-    elif mode == "council":
-        from quorate.modes.council import run_council
-        asyncio.run(run_council(
-            question,
-            context=context,
-            rounds=rounds,
-            timeout=timeout,
-            effort=effort_enum,
-            judge_model=judge_model,
-            critic_model=critic_model,
-            no_critic=no_critic,
-            domain=domain,
-            persona=persona,
-            console=console,
-        ))
-
-    elif mode == "redteam":
-        # Simplified: run as council with redteam framing
-        console.print("[yellow]Red team mode — running as council with adversarial framing.[/yellow]\n")
-        from quorate.modes.council import run_council
-        redteam_context = (
-            "RED TEAM EXERCISE: Your job is to BREAK this plan, not improve it. "
-            "Find specific, concrete failure modes. Be adversarial."
+def _preset_cmd(name: str):
+    """Create a handler function for a preset."""
+    def handler(
+        question: str | None = None,
+        prompt_file: Path | None = None,
+        context: str | None = None,
+        rounds: int | None = None,
+        timeout: float = 300,
+        effort: str | None = None,
+        quiet: bool = False,
+        **kwargs,
+    ) -> None:
+        preset = PRESETS[name]
+        prefix = preset["context_prefix"]
+        full_context = f"{prefix}\n\n{context}" if context else prefix
+        council(
+            question=question, prompt_file=prompt_file, context=full_context,
+            rounds=rounds or preset.get("rounds", 1), timeout=timeout, effort=effort,
+            no_critic=preset.get("no_critic", False),
+            no_judge=preset.get("no_judge", False), quiet=quiet,
         )
-        full_context = f"{redteam_context}\n\n{context}" if context else redteam_context
-        asyncio.run(run_council(
-            question,
-            context=full_context,
-            rounds=rounds or 1,
-            timeout=timeout,
-            effort=effort_enum,
-            console=console,
-        ))
+    return handler
 
-    elif mode == "oxford":
-        console.print("[yellow]Oxford mode not yet ported. Running as council.[/yellow]\n")
-        from quorate.modes.council import run_council
-        asyncio.run(run_council(
-            question, context=context, rounds=1, timeout=timeout,
-            effort=effort_enum, console=console,
-        ))
+
+# Register preset subcommands
+for _name, _cfg in PRESETS.items():
+    _fn = _preset_cmd(_name)
+    _fn.__name__ = _name
+    _fn.__doc__ = _cfg["description"]
+    # Cyclopts command registration with proper signature
+    @app.command(name=_name)
+    def _cmd(
+        question: str | None = None,
+        *,
+        prompt_file: Path | None = None,
+        context: str | None = None,
+        rounds: int | None = None,
+        timeout: float = 300,
+        effort: str | None = None,
+        quiet: bool = False,
+        _preset_name: str = _name,
+    ) -> None:
+        _preset_cmd(_preset_name)(
+            question=question, prompt_file=prompt_file, context=context,
+            rounds=rounds, timeout=timeout, effort=effort, quiet=quiet,
+        )
+    _cmd.__doc__ = _cfg["description"]
+
+
+# --- Auto-classify ---
 
 
 async def _classify(question: str) -> str:
-    """Auto-classify question into best mode."""
     from quorate.api import query_judge
     from quorate.config import CLASSIFIER_MODEL, Message
     from quorate.prompts import CLASSIFIER_PROMPT
@@ -139,5 +221,5 @@ async def _classify(question: str) -> str:
     messages = [Message.system(CLASSIFIER_PROMPT), Message.user(question)]
     response = await query_judge(CLASSIFIER_MODEL, messages, max_tokens=10, timeout=15)
     result = response.strip().lower().rstrip(".")
-    valid = {"quick", "council", "oxford", "redteam", "discuss"}
+    valid = {"quick", "council", "redteam"}
     return result if result in valid else "council"
