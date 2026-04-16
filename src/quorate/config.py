@@ -162,9 +162,31 @@ def is_error(content: str) -> bool:
     )
 
 
+def _op_read(item: str) -> str | None:
+    """Try reading a credential from 1Password Agents vault."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["op", "item", "get", item, "--vault=Agents", "--fields=credential", "--reveal"],
+            capture_output=True, text=True, timeout=5,
+        )
+        val = result.stdout.strip()
+        return val if val else None
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+
+
+# 1Password item names for quorate keys
+_OP_ITEMS = {
+    "openrouter": "OpenRouter API Key (quorate)",
+    "google": "Google AI Studio Key (quorate)",
+    "xai": "xAI API Key (quorate)",
+}
+
+
 def api_keys() -> dict[str, str | None]:
-    """Load all API keys from environment."""
-    return {
+    """Load API keys from environment, falling back to 1Password."""
+    keys = {
         "openrouter": _env("QUORATE_OPENROUTER_KEY") or _env("OPENROUTER_API_KEY"),
         "google": _env("GOOGLE_API_KEY"),
         "zhipu": _env("ZHIPU_API_KEY"),
@@ -172,6 +194,11 @@ def api_keys() -> dict[str, str | None]:
         "anthropic": _env("ANTHROPIC_API_KEY"),
         "openai": _env("OPENAI_API_KEY"),
     }
+    # Fill missing keys from 1Password
+    for key_name, op_item in _OP_ITEMS.items():
+        if not keys.get(key_name):
+            keys[key_name] = _op_read(op_item)
+    return keys
 
 
 @dataclass
