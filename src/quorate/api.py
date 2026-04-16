@@ -123,7 +123,8 @@ async def _xai(
     messages: list[Message], max_tokens: int, timeout: float,
     effort: ReasoningEffort | None,
 ) -> str:
-    body: dict = {"model": model, "messages": [m.to_dict() for m in messages], "max_tokens": max_tokens}
+    bare = model.removeprefix("x-ai/")
+    body: dict = {"model": bare, "messages": [m.to_dict() for m in messages], "max_tokens": max_tokens}
     if effort:
         body["reasoning_effort"] = effort.value
     try:

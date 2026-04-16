@@ -38,7 +38,7 @@ ANTHROPIC_VERSION = "2023-06-01"
 JUDGE_MODEL = "google/gemini-3.1-pro-preview"
 CRITIQUE_MODEL = "anthropic/claude-sonnet-4-6"
 CLASSIFIER_MODEL = "anthropic/claude-opus-4-6"
-XAI_DEFAULT_MODEL = "grok-4.20-experimental-beta-0304-reasoning"
+XAI_DEFAULT_MODEL = "grok-4.20-0309-reasoning"
 
 
 def _env(var: str) -> str | None:
@@ -62,7 +62,7 @@ def resolved_council() -> list[ModelEntry]:
     """Resolve council models at runtime with env overrides."""
     model_1 = _env("CONSILIUM_MODEL_M1") or "openai/gpt-5.4-pro"
     model_2 = _env("CONSILIUM_MODEL_M2") or "anthropic/claude-opus-4-6"
-    model_3 = _env("CONSILIUM_MODEL_M3") or "x-ai/grok-4"
+    model_3 = _env("CONSILIUM_MODEL_M3") or "x-ai/grok-4.20-0309-reasoning"
     model_4 = _env("CONSILIUM_MODEL_M4") or "deepseek/deepseek-v3.2"
     model_5 = _env("CONSILIUM_MODEL_M5") or "glm-5.1"
     xai_model = _env("CONSILIUM_XAI_MODEL") or XAI_DEFAULT_MODEL
