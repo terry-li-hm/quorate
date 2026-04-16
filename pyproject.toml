@@ -1,8 +1,9 @@
 [project]
 name = "quorate"
-version = "0.1.0"
+version = "0.1.1"
 description = "Multi-model deliberation CLI — frontier LLMs debate, then judge"
 license = "MIT"
+readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "cyclopts>=4.0",
