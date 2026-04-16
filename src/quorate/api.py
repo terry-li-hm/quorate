@@ -7,6 +7,7 @@ import json
 import re
 
 import httpx
+from pathlib import Path
 
 from quorate.config import (
     ANTHROPIC_URL,
@@ -179,25 +180,29 @@ async def _codex_exec(model: str, messages: list[Message], timeout: float) -> st
     prompt = "\n\n".join(sections)
     if not prompt:
         return f"[Error: Empty prompt for codex {bare}]"
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as tmp:
+        outfile = tmp.name
     try:
         proc = await asyncio.wait_for(
             asyncio.create_subprocess_exec(
-                "codex", "exec", "-m", bare, prompt,
+                "codex", "exec", "-m", bare, "-o", outfile, "--skip-git-repo-check", prompt,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             ), timeout=timeout,
         )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(input=b"\n"), timeout=timeout
-        )
+        await asyncio.wait_for(proc.communicate(input=b"\n"), timeout=timeout)
     except (asyncio.TimeoutError, FileNotFoundError) as exc:
         return f"[Error: codex exec {bare}: {exc}]"
+    finally:
+        import os
+        result = ""
+        if os.path.exists(outfile):
+            result = Path(outfile).read_text().strip()
+            os.unlink(outfile)
     if proc.returncode != 0:
-        err = (stderr or b"").decode().strip()
-        return f"[Error: codex exec {bare}: exit {proc.returncode} {err[:100]}]"
-    # In non-TTY mode, stdout contains just the response text
-    result = stdout.decode().strip()
+        return f"[Error: codex exec {bare}: exit {proc.returncode}]"
     return result if result else f"[No response from codex {bare}]"
 
 
