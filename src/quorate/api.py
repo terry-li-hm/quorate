@@ -186,7 +186,8 @@ async def _codex_exec(model: str, messages: list[Message], timeout: float) -> st
     try:
         proc = await asyncio.wait_for(
             asyncio.create_subprocess_exec(
-                "codex", "exec", "-m", bare, "-o", outfile, "--skip-git-repo-check", prompt,
+                "codex", "exec", "-m", bare, "-o", outfile, "--skip-git-repo-check",
+                "-c", 'model_reasoning_effort="high"', prompt,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
