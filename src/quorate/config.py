@@ -64,7 +64,7 @@ def resolved_council() -> list[ModelEntry]:
     model_2 = _env("CONSILIUM_MODEL_M2") or "anthropic/claude-opus-4-6"
     model_3 = _env("CONSILIUM_MODEL_M3") or "x-ai/grok-4"
     model_4 = _env("CONSILIUM_MODEL_M4") or "deepseek/deepseek-v3.2"
-    model_5 = _env("CONSILIUM_MODEL_M5") or "glm-5"
+    model_5 = _env("CONSILIUM_MODEL_M5") or "glm-5.1"
     xai_model = _env("CONSILIUM_XAI_MODEL") or XAI_DEFAULT_MODEL
 
     return [
@@ -72,7 +72,7 @@ def resolved_council() -> list[ModelEntry]:
         ModelEntry(_display_name(model_2), model_2),
         ModelEntry(_xai_label(xai_model), model_3),
         ModelEntry(_display_name(model_4), model_4),
-        ModelEntry(_display_name("z-ai/glm-5"), "z-ai/glm-5"),
+        ModelEntry(_display_name("z-ai/glm-5.1"), "z-ai/glm-5.1"),
     ]
 
 
@@ -125,7 +125,7 @@ def _xai_label(model: str) -> str:
 
 THINKING_MODELS = {
     "claude-opus-4-6", "claude-opus-4.5", "gpt-5.4-pro", "gpt-5.4", "gpt-5.2-pro", "gpt-5.2",
-    "gemini-3.1-pro-preview", "grok-4", "deepseek-r1", "glm-5",
+    "gemini-3.1-pro-preview", "grok-4", "deepseek-r1", "glm-5", "glm-5.1",
 }
 
 
