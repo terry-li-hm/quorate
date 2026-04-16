@@ -63,7 +63,7 @@ def resolved_council() -> list[ModelEntry]:
     model_1 = _env("CONSILIUM_MODEL_M1") or "openai/gpt-5.4-pro"
     model_2 = _env("CONSILIUM_MODEL_M2") or "anthropic/claude-opus-4-6"
     model_3 = _env("CONSILIUM_MODEL_M3") or "x-ai/grok-4.20-0309-reasoning"
-    model_4 = _env("CONSILIUM_MODEL_M4") or "deepseek/deepseek-v3.2"
+    model_4 = _env("CONSILIUM_MODEL_M4") or "qwen/qwen3.6-plus"
     model_5 = _env("CONSILIUM_MODEL_M5") or "glm-5.1"
     xai_model = _env("CONSILIUM_XAI_MODEL") or XAI_DEFAULT_MODEL
 
