@@ -120,13 +120,13 @@ async def run_council(
             ]
 
             # Query this speaker sequentially (debate is sequential)
-            from quorate.api import query_with_fallback
+            from quorate.api import query_model
             from quorate.config import api_keys
             import httpx
 
             keys = api_keys()
             async with httpx.AsyncClient() as client:
-                name, model_used, response = await query_with_fallback(
+                name, model_used, response = await query_model(
                     client, keys, entry, msgs, max_tokens=2048, timeout=timeout, effort=effort
                 )
 

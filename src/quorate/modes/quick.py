@@ -30,7 +30,7 @@ async def run_quick(
     console.print(f"[dim](querying {len(models)} models in parallel...)[/dim]\n")
     start = time.monotonic()
 
-    results = await run_parallel(models, messages, max_tokens=2048, timeout=timeout, effort=effort)
+    results = await run_parallel(models, messages, max_tokens=2048, timeout=max(timeout, 180), effort=effort)
 
     duration = time.monotonic() - start
     transcript_parts = []

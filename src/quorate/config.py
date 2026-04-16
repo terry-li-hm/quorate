@@ -68,11 +68,11 @@ def resolved_council() -> list[ModelEntry]:
     xai_model = _env("CONSILIUM_XAI_MODEL") or XAI_DEFAULT_MODEL
 
     return [
-        ModelEntry(_display_name(model_1), model_1, None),
-        ModelEntry(_display_name(model_2), model_2, ("anthropic", "claude-sonnet-4-6")),
-        ModelEntry(_xai_label(xai_model), model_3, ("xai", xai_model)),
-        ModelEntry(_display_name(model_4), model_4, None),
-        ModelEntry(_display_name("z-ai/glm-5"), "z-ai/glm-5", ("zhipu", model_5)),
+        ModelEntry(_display_name(model_1), model_1),
+        ModelEntry(_display_name(model_2), model_2),
+        ModelEntry(_xai_label(xai_model), model_3),
+        ModelEntry(_display_name(model_4), model_4),
+        ModelEntry(_display_name("z-ai/glm-5"), "z-ai/glm-5"),
     ]
 
 
@@ -165,7 +165,7 @@ def is_error(content: str) -> bool:
 def api_keys() -> dict[str, str | None]:
     """Load all API keys from environment."""
     return {
-        "openrouter": _env("OPENROUTER_API_KEY"),
+        "openrouter": _env("QUORATE_OPENROUTER_KEY") or _env("OPENROUTER_API_KEY"),
         "google": _env("GOOGLE_API_KEY"),
         "zhipu": _env("ZHIPU_API_KEY"),
         "xai": _env("XAI_API_KEY"),
