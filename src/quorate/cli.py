@@ -24,10 +24,14 @@ app = cyclopts.App(
 def _resolve_question(question: str | None, prompt_file: Path | None) -> str:
     if prompt_file:
         return prompt_file.read_text().strip()
-    if not question:
-        Console().print("[red]No question provided.[/red]")
-        raise SystemExit(1)
-    return question
+    if question:
+        # If it looks like a file path that exists, read it
+        path = Path(question)
+        if path.is_file():
+            return path.read_text().strip()
+        return question
+    Console().print("[red]No question provided.[/red]")
+    raise SystemExit(1)
 
 
 def _resolve_effort(effort: str | None):
