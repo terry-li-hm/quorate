@@ -162,6 +162,44 @@ async def _openai(
     return _strip_think(content) if content else f"[No response from openai {bare}]"
 
 
+async def _codex_exec(model: str, messages: list[Message], timeout: float) -> str:
+    """Query Codex CLI exec mode (uses Codex Pro subscription)."""
+    bare = model.removeprefix("openai/")
+    # Codex uses base model names (gpt-5.4, not gpt-5.4-pro)
+    if bare.endswith("-pro"):
+        bare = bare.removesuffix("-pro")
+    # Combine messages into a single prompt
+    sections = []
+    for msg in messages:
+        text = msg.content.strip()
+        if not text:
+            continue
+        sections.append(f"Previous response:\n{text}" if msg.role == "assistant" else text)
+    prompt = "\n\n".join(sections)
+    if not prompt:
+        return f"[Error: Empty prompt for codex {bare}]"
+    try:
+        proc = await asyncio.wait_for(
+            asyncio.create_subprocess_exec(
+                "codex", "exec", "-m", bare, prompt,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            ), timeout=timeout,
+        )
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(input=b"\n"), timeout=timeout
+        )
+    except (asyncio.TimeoutError, FileNotFoundError) as exc:
+        return f"[Error: codex exec {bare}: {exc}]"
+    if proc.returncode != 0:
+        err = (stderr or b"").decode().strip()
+        return f"[Error: codex exec {bare}: exit {proc.returncode} {err[:100]}]"
+    # In non-TTY mode, stdout contains just the response text
+    result = stdout.decode().strip()
+    return result if result else f"[No response from codex {bare}]"
+
+
 async def _claude_print(model: str, messages: list[Message], timeout: float) -> str:
     """Query Claude Code CLI --print (Max subscription)."""
     bare = model.removeprefix("anthropic/")
@@ -251,10 +289,16 @@ async def query_model(
         if not is_error(response):
             return (entry.name, model_name, response)
 
-    elif provider == "openai" and keys.get("openai"):
-        response = await _openai(client, keys["openai"], entry.model, messages, max_tokens, timeout, effort)
+    elif provider == "openai":
+        # Codex CLI first (Pro subscription, free)
+        response = await _codex_exec(entry.model, messages, timeout)
         if not is_error(response):
             return (entry.name, model_name, response)
+        # Then native OpenAI API
+        if keys.get("openai"):
+            response = await _openai(client, keys["openai"], entry.model, messages, max_tokens, timeout, effort)
+            if not is_error(response):
+                return (entry.name, model_name, response)
 
     # OpenRouter fallback
     if keys.get("openrouter"):
