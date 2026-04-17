@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from pathlib import Path
 from typing import Annotated
 
 import cyclopts
 from porin import EXIT_ERROR, action, emit_err, emit_ok
 from rich.console import Console
+
+
+def _is_agent() -> bool:
+    """True when stdout is a pipe/redirect (agent consuming), not a TTY."""
+    return not sys.stdout.isatty()
 
 from quorate import __version__
 
@@ -152,6 +158,7 @@ def auto(
     output: Path | None = None,
 ) -> None:
     """Auto-classify and deliberate (default when no subcommand given)."""
+    json_output = json_output or _is_agent()
     text = _resolve_question(question, prompt_file)
     resolved_ctx = _resolve_context(context)
     mode = asyncio.run(_classify(text))
@@ -176,6 +183,7 @@ def quick(
     output: Path | None = None,
 ) -> None:
     """Parallel queries — all models answer independently."""
+    json_output = json_output or _is_agent()
     from quorate.modes.quick import run_quick
     text = _resolve_question(question, prompt_file)
     resolved_ctx = _resolve_context(context)
@@ -209,6 +217,7 @@ def council(
     output: Path | None = None,
 ) -> None:
     """Full deliberation — blind phase, debate, judge synthesis, critique."""
+    json_output = json_output or _is_agent()
     from quorate.modes.council import run_council
     text = _resolve_question(question, prompt_file)
     resolved_ctx = _resolve_context(context)
