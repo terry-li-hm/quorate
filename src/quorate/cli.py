@@ -25,17 +25,12 @@ _tree = CommandTree("quorate")
 _tree.add_command("council", description="Full deliberation — blind phase, debate, judge synthesis, critique", params=[
     {"name": "question", "type": "string", "required": True},
     {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
-    {"name": "--rounds", "type": "integer", "default": 1},
     {"name": "--deep", "type": "boolean", "default": False, "description": "Force 2+ debate rounds"},
-    {"name": "--timeout", "type": "number", "default": 300},
-    {"name": "--effort", "type": "string", "description": "low/medium/high reasoning effort"},
-    {"name": "--judge-model", "type": "string"},
     {"name": "--json", "type": "boolean", "default": False, "description": "Force JSON in TTY (auto in pipes)"},
 ], annotations={"readonly": True})
 _tree.add_command("quick", description="Parallel queries — all models answer independently", params=[
     {"name": "question", "type": "string", "required": True},
     {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
-    {"name": "--timeout", "type": "number", "default": 300},
     {"name": "--json", "type": "boolean", "default": False},
 ], annotations={"readonly": True})
 _tree.add_command("redteam", description="Adversarial stress-test — find what breaks", params=[
@@ -66,11 +61,8 @@ app = cyclopts.App(
 # --- Shared parameter resolution ---
 
 
-def _resolve_question(question: str | None, prompt_file: Path | None) -> str:
-    if prompt_file:
-        return prompt_file.read_text().strip()
+def _resolve_question(question: str | None) -> str:
     if question:
-        # If it looks like a file path that exists, read it
         path = Path(question)
         if path.is_file():
             return path.read_text().strip()
@@ -109,17 +101,6 @@ def _emit_result(command: str, result: str | dict | None, json_output: bool) -> 
     emit_ok(command, data, [
         action("quorate redteam --context <file>", "Stress-test the synthesis"),
     ])
-
-
-def _resolve_effort(effort: str | None):
-    if not effort:
-        return None
-    from quorate.config import ReasoningEffort
-    try:
-        return ReasoningEffort(effort.lower())
-    except ValueError:
-        Console().print(f"[red]Invalid effort: {effort}. Use low/medium/high.[/red]")
-        raise SystemExit(1)
 
 
 # --- Presets: named council configurations ---
@@ -177,46 +158,37 @@ PRESETS = {
 def auto(
     question: str | None = None,
     *,
-    prompt_file: Path | None = None,
     context: tuple[str, ...] = (),
-    timeout: float = 300,
-    effort: str | None = None,
-    quiet: bool = False,
+    deep: bool = False,
     json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
 ) -> None:
     """Auto-classify and deliberate (default when no subcommand given)."""
     json_output = json_output or _is_agent()
-    text = _resolve_question(question, prompt_file)
+    text = _resolve_question(question)
     resolved_ctx = _resolve_context(context)
     mode = asyncio.run(_classify(text))
     if not json_output:
-        Console(quiet=quiet).print(f"[dim]→ {mode}[/dim]\n")
-    # Re-dispatch — wrap resolved context back into tuple for CLI functions
+        Console().print(f"[dim]→ {mode}[/dim]\n")
     ctx_tuple = (resolved_ctx,) if resolved_ctx else ()
     handler = {"quick": quick, "council": council, "redteam": _preset_cmd("redteam")}.get(mode, council)
-    handler(question=text, context=ctx_tuple, timeout=timeout, effort=effort, quiet=quiet, json_output=json_output)
+    handler(question=text, context=ctx_tuple, deep=deep, json_output=json_output)
 
 
 @app.command
 def quick(
     question: str | None = None,
     *,
-    prompt_file: Path | None = None,
     context: tuple[str, ...] = (),
-    timeout: float = 300,
-    effort: str | None = None,
-    quiet: bool = False,
     json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
 ) -> None:
     """Parallel queries — all models answer independently."""
     json_output = json_output or _is_agent()
     from quorate.modes.quick import run_quick
-    text = _resolve_question(question, prompt_file)
+    text = _resolve_question(question)
     resolved_ctx = _resolve_context(context)
-    console = Console(quiet=quiet or json_output)
+    console = Console(quiet=json_output)
     result = asyncio.run(run_quick(
-        text, context=resolved_ctx, timeout=timeout,
-        effort=_resolve_effort(effort), console=console,
+        text, context=resolved_ctx, console=console,
         json_output=json_output,
     ))
     _emit_result("quorate quick", result, json_output)
@@ -226,35 +198,20 @@ def quick(
 def council(
     question: str | None = None,
     *,
-    prompt_file: Path | None = None,
     context: tuple[str, ...] = (),
-    rounds: int = 1,
     deep: bool = False,
-    timeout: float = 300,
-    effort: str | None = None,
-    judge_model: str | None = None,
-    critic_model: str | None = None,
-    no_critic: bool = False,
-    no_judge: bool = False,
-    domain: str | None = None,
-    persona: str | None = None,
-    quiet: bool = False,
     json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
 ) -> None:
     """Full deliberation — blind phase, debate, judge synthesis, critique."""
     json_output = json_output or _is_agent()
     from quorate.modes.council import run_council
-    text = _resolve_question(question, prompt_file)
+    text = _resolve_question(question)
     resolved_ctx = _resolve_context(context)
-    if deep:
-        rounds = max(rounds, 2)
-    console = Console(quiet=quiet or json_output)
+    rounds = 2 if deep else 1
+    console = Console(quiet=json_output)
     result = asyncio.run(run_council(
-        text, context=resolved_ctx, rounds=rounds, timeout=timeout,
-        effort=_resolve_effort(effort), judge_model=judge_model,
-        critic_model=critic_model, no_critic=no_critic or no_judge,
-        domain=domain, persona=persona, console=console,
-        json_output=json_output,
+        text, context=resolved_ctx, rounds=rounds,
+        console=console, json_output=json_output,
     ))
     _emit_result("quorate council", result, json_output)
 
@@ -263,12 +220,7 @@ def _preset_cmd(name: str):
     """Create a handler function for a preset."""
     def handler(
         question: str | None = None,
-        prompt_file: Path | None = None,
         context: str | None = None,
-        rounds: int | None = None,
-        timeout: float = 300,
-        effort: str | None = None,
-        quiet: bool = False,
         json_output: bool = False,
         **_kwargs,
     ) -> None:
@@ -276,10 +228,7 @@ def _preset_cmd(name: str):
         prefix = preset["context_prefix"]
         full_context = f"{prefix}\n\n{context}" if context else prefix
         council(
-            question=question, prompt_file=prompt_file, context=(full_context,),
-            rounds=rounds or preset.get("rounds", 1), timeout=timeout, effort=effort,
-            no_critic=preset.get("no_critic", False),
-            no_judge=preset.get("no_judge", False), quiet=quiet,
+            question=question, context=(full_context,),
             json_output=json_output,
         )
     return handler
@@ -290,24 +239,18 @@ for _name, _cfg in PRESETS.items():
     _fn = _preset_cmd(_name)
     _fn.__name__ = _name
     _fn.__doc__ = _cfg["description"]
-    # Cyclopts command registration with proper signature
+
     @app.command(name=_name)
     def _cmd(
         question: str | None = None,
         *,
-        prompt_file: Path | None = None,
         context: tuple[str, ...] = (),
-        rounds: int | None = None,
-        timeout: float = 300,
-        effort: str | None = None,
-        quiet: bool = False,
         json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
         _preset_name: str = _name,
     ) -> None:
         resolved_ctx = _resolve_context(context)
         _preset_cmd(_preset_name)(
-            question=question, prompt_file=prompt_file, context=resolved_ctx,
-            rounds=rounds, timeout=timeout, effort=effort, quiet=quiet,
+            question=question, context=resolved_ctx,
             json_output=json_output,
         )
     _cmd.__doc__ = _cfg["description"]
