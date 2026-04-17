@@ -26,6 +26,37 @@ class ModelEntry(NamedTuple):
     fallback: tuple[str, str] | None = None
 
 
+@dataclass
+class ModelCallResult:
+    """Result from a single model call with telemetry."""
+    name: str
+    model_id: str
+    response: str
+    provider: str = "unknown"
+    latency_s: float = 0.0
+    tokens_in: int | None = None
+    tokens_out: int | None = None
+
+    @property
+    def is_error(self) -> bool:
+        return is_error(self.response)
+
+    def to_dict(self) -> dict:
+        result: dict = {
+            "model": self.name,
+            "model_id": self.model_id,
+            "provider": self.provider,
+            "latency_s": round(self.latency_s, 2),
+        }
+        if self.is_error:
+            result["error"] = self.response
+        else:
+            result["response"] = self.response
+        if self.tokens_in is not None:
+            result["tokens"] = {"input": self.tokens_in, "output": self.tokens_out}
+        return result
+
+
 # API endpoints
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 GOOGLE_AI_STUDIO_URL = "https://generativelanguage.googleapis.com/v1beta/models"

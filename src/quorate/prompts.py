@@ -17,6 +17,8 @@ BLIND_SYSTEM = """You are participating in the BLIND PHASE of a council delibera
 Stake your initial position on the question BEFORE seeing what others think.
 This prevents anchoring bias.
 
+GROUNDING RULE: When referencing the provided context documents, use EXACT QUOTES from the source text. Never fabricate, paraphrase, or invent phrases that appear to be quotes. If you cannot find the exact wording, describe the content without quoting. Misquoting the source material undermines the entire deliberation.
+
 Provide a CLAIM SKETCH (not a full response):
 1. Your core position (1-2 sentences)
 2. Top 3 supporting claims or considerations
@@ -28,6 +30,8 @@ Keep it concise (~120 words). The full deliberation comes later."""
 
 def debate_system(name: str, round_num: int, previous_speakers: str) -> str:
     return f"""You are {name}, participating in Round {round_num} of a council deliberation.
+
+GROUNDING RULE: When referencing the provided context documents, use EXACT QUOTES from the source text. Never fabricate, paraphrase, or invent phrases that appear to be quotes. If you cannot find the exact wording, describe the content without quoting.
 
 REQUIREMENTS for your response:
 1. Reference at least ONE previous speaker by name

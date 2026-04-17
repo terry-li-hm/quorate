@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -32,6 +34,39 @@ def _resolve_question(question: str | None, prompt_file: Path | None) -> str:
         return question
     Console().print("[red]No question provided.[/red]")
     raise SystemExit(1)
+
+
+def _resolve_context(context: tuple[str, ...]) -> str | None:
+    """Resolve context: each item can be a file path or inline text. Multiple items concatenated."""
+    if not context:
+        return None
+    parts = []
+    for item in context:
+        path = Path(item).expanduser()
+        if path.is_file():
+            parts.append(path.read_text().strip())
+        else:
+            parts.append(item)
+    return "\n\n---\n\n".join(parts)
+
+
+def _write_output(
+    output: Path | None, result: str | dict | None,
+    console: Console, json_output: bool,
+) -> None:
+    """Write result to file or stdout."""
+    if not result:
+        return
+    if json_output:
+        content = json.dumps(result, indent=2, ensure_ascii=False)
+        if output:
+            output.write_text(content + "\n")
+            Console().print(f"[dim]→ {output}[/dim]")
+        else:
+            sys.stdout.write(content + "\n")
+    elif output:
+        output.write_text(console.export_text())
+        Console().print(f"[dim]→ {output}[/dim]")
 
 
 def _resolve_effort(effort: str | None):
@@ -101,18 +136,23 @@ def auto(
     question: str | None = None,
     *,
     prompt_file: Path | None = None,
-    context: str | None = None,
+    context: tuple[str, ...] = (),
     timeout: float = 300,
     effort: str | None = None,
     quiet: bool = False,
+    json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
+    output: Path | None = None,
 ) -> None:
     """Auto-classify and deliberate (default when no subcommand given)."""
     text = _resolve_question(question, prompt_file)
+    resolved_ctx = _resolve_context(context)
     mode = asyncio.run(_classify(text))
-    Console(quiet=quiet).print(f"[dim]→ {mode}[/dim]\n")
-    # Re-dispatch
+    if not json_output:
+        Console(quiet=quiet).print(f"[dim]→ {mode}[/dim]\n")
+    # Re-dispatch — wrap resolved context back into tuple for CLI functions
+    ctx_tuple = (resolved_ctx,) if resolved_ctx else ()
     handler = {"quick": quick, "council": council, "redteam": _preset_cmd("redteam")}.get(mode, council)
-    handler(question=text, context=context, timeout=timeout, effort=effort, quiet=quiet)
+    handler(question=text, context=ctx_tuple, timeout=timeout, effort=effort, quiet=quiet, json_output=json_output, output=output)
 
 
 @app.command
@@ -120,18 +160,24 @@ def quick(
     question: str | None = None,
     *,
     prompt_file: Path | None = None,
-    context: str | None = None,
+    context: tuple[str, ...] = (),
     timeout: float = 300,
     effort: str | None = None,
     quiet: bool = False,
+    json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
+    output: Path | None = None,
 ) -> None:
     """Parallel queries — all models answer independently."""
     from quorate.modes.quick import run_quick
     text = _resolve_question(question, prompt_file)
-    asyncio.run(run_quick(
-        text, context=context, timeout=timeout,
-        effort=_resolve_effort(effort), console=Console(quiet=quiet),
+    resolved_ctx = _resolve_context(context)
+    console = Console(record=bool(output), quiet=quiet or json_output)
+    result = asyncio.run(run_quick(
+        text, context=resolved_ctx, timeout=timeout,
+        effort=_resolve_effort(effort), console=console,
+        json_output=json_output,
     ))
+    _write_output(output, result, console, json_output)
 
 
 @app.command
@@ -139,7 +185,7 @@ def council(
     question: str | None = None,
     *,
     prompt_file: Path | None = None,
-    context: str | None = None,
+    context: tuple[str, ...] = (),
     rounds: int = 1,
     deep: bool = False,
     timeout: float = 300,
@@ -151,18 +197,24 @@ def council(
     domain: str | None = None,
     persona: str | None = None,
     quiet: bool = False,
+    json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
+    output: Path | None = None,
 ) -> None:
     """Full deliberation — blind phase, debate, judge synthesis, critique."""
     from quorate.modes.council import run_council
     text = _resolve_question(question, prompt_file)
+    resolved_ctx = _resolve_context(context)
     if deep:
         rounds = max(rounds, 2)
-    asyncio.run(run_council(
-        text, context=context, rounds=rounds, timeout=timeout,
+    console = Console(record=bool(output), quiet=quiet or json_output)
+    result = asyncio.run(run_council(
+        text, context=resolved_ctx, rounds=rounds, timeout=timeout,
         effort=_resolve_effort(effort), judge_model=judge_model,
         critic_model=critic_model, no_critic=no_critic or no_judge,
-        domain=domain, persona=persona, console=Console(quiet=quiet),
+        domain=domain, persona=persona, console=console,
+        json_output=json_output,
     ))
+    _write_output(output, result, console, json_output)
 
 
 def _preset_cmd(name: str):
@@ -175,16 +227,19 @@ def _preset_cmd(name: str):
         timeout: float = 300,
         effort: str | None = None,
         quiet: bool = False,
-        **kwargs,
+        json_output: bool = False,
+        output: Path | None = None,
+        **_kwargs,
     ) -> None:
         preset = PRESETS[name]
         prefix = preset["context_prefix"]
         full_context = f"{prefix}\n\n{context}" if context else prefix
         council(
-            question=question, prompt_file=prompt_file, context=full_context,
+            question=question, prompt_file=prompt_file, context=(full_context,),
             rounds=rounds or preset.get("rounds", 1), timeout=timeout, effort=effort,
             no_critic=preset.get("no_critic", False),
             no_judge=preset.get("no_judge", False), quiet=quiet,
+            json_output=json_output, output=output,
         )
     return handler
 
@@ -200,16 +255,20 @@ for _name, _cfg in PRESETS.items():
         question: str | None = None,
         *,
         prompt_file: Path | None = None,
-        context: str | None = None,
+        context: tuple[str, ...] = (),
         rounds: int | None = None,
         timeout: float = 300,
         effort: str | None = None,
         quiet: bool = False,
+        json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
+        output: Path | None = None,
         _preset_name: str = _name,
     ) -> None:
+        resolved_ctx = _resolve_context(context)
         _preset_cmd(_preset_name)(
-            question=question, prompt_file=prompt_file, context=context,
+            question=question, prompt_file=prompt_file, context=resolved_ctx,
             rounds=rounds, timeout=timeout, effort=effort, quiet=quiet,
+            json_output=json_output, output=output,
         )
     _cmd.__doc__ = _cfg["description"]
 

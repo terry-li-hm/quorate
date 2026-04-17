@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import time
+from typing import Any
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -54,8 +55,12 @@ async def run_council(
     domain: str | None = None,
     persona: str | None = None,
     console: Console | None = None,
-) -> str:
-    """Run full council deliberation: blind → debate → judge → critique."""
+    json_output: bool = False,
+) -> str | dict[str, Any]:
+    """Run full council deliberation: blind → debate → judge → critique.
+
+    Returns judge_response (str) normally, or structured dict when json_output=True.
+    """
     console = console or Console()
     models = models or resolved_council()
     judge = resolved_judge(judge_model)
@@ -63,6 +68,9 @@ async def run_council(
 
     full_question = f"{context}\n\n{question}" if context else question
     start = time.monotonic()
+
+    # JSON accumulator
+    result: dict[str, Any] = {"question": question, "phases": {}} if json_output else {}
 
     # --- BLIND PHASE ---
     console.print("\n[bold cyan]BLIND PHASE[/bold cyan]")
@@ -73,29 +81,39 @@ async def run_council(
     )
 
     blind_claims: dict[str, str] = {}
-    for name, _, response in blind_results:
-        if not is_error(response):
-            blind_claims[name] = response
+    blind_json: list[dict[str, Any]] = []
+    for mcr in blind_results:
+        if not mcr.is_error:
+            blind_claims[mcr.name] = mcr.response
+            blind_json.append(mcr.to_dict())
             console.print(Panel(
-                Markdown(response), title=f"[bold]{name}[/bold]", border_style="dim"
+                Markdown(mcr.response), title=f"[bold]{mcr.name}[/bold]", border_style="dim"
             ))
         else:
-            console.print(f"[red]{name}: {response}[/red]")
+            blind_json.append(mcr.to_dict())
+            console.print(f"[red]{mcr.name}: {mcr.response}[/red]")
+
+    if json_output:
+        result["phases"]["blind"] = blind_json
 
     if len(blind_claims) < 2:
         console.print("[red]Too few models responded in blind phase.[/red]")
+        if json_output:
+            result["error"] = "Too few models responded in blind phase"
+            return result
         return ""
 
     # --- DEBATE ROUNDS ---
+    blind_summary = "\n\n".join(
+        f"**{name}** (blind claim): {claim}" for name, claim in blind_claims.items()
+    )
     conversation: list[tuple[str, str]] = []
+    debate_json: list[dict[str, Any]] = []
     for round_num in range(1, rounds + 1):
         console.print(f"\n[bold cyan]DEBATE ROUND {round_num}[/bold cyan]")
         challenger_idx = (round_num - 1) % len(models)
 
-        # Build debate context from blind claims and prior conversation
-        blind_summary = "\n\n".join(
-            f"**{name}** (blind claim): {claim}" for name, claim in blind_claims.items()
-        )
+        # Build debate context from prior conversation (blind_summary set above)
         conv_summary = "\n\n".join(
             f"**{name}**: {_sanitize(text)}"
             for name, text in conversation
@@ -107,7 +125,8 @@ async def run_council(
                 continue
 
             speaker_prompt = debate_system(entry.name, round_num, previous_speakers or "None yet")
-            if idx == challenger_idx:
+            is_challenger = idx == challenger_idx
+            if is_challenger:
                 speaker_prompt += CHALLENGER_ADDITION
 
             context_block = f"BLIND CLAIMS:\n{blind_summary}"
@@ -126,21 +145,30 @@ async def run_council(
 
             keys = api_keys()
             async with httpx.AsyncClient() as client:
-                name, model_used, response = await query_model(
+                mcr = await query_model(
                     client, keys, entry, msgs, max_tokens=2048, timeout=timeout, effort=effort
                 )
 
-            if not is_error(response):
-                conversation.append((name, response))
-                role = " [yellow](challenger)[/yellow]" if idx == challenger_idx else ""
+            entry_dict = mcr.to_dict()
+            entry_dict["round"] = round_num
+            entry_dict["role"] = "challenger" if is_challenger else "speaker"
+
+            if not mcr.is_error:
+                conversation.append((mcr.name, mcr.response))
+                debate_json.append(entry_dict)
+                role = " [yellow](challenger)[/yellow]" if is_challenger else ""
                 console.print(Panel(
-                    Markdown(response), title=f"[bold]{name}[/bold]{role}", border_style="dim"
+                    Markdown(mcr.response), title=f"[bold]{mcr.name}[/bold]{role}", border_style="dim"
                 ))
                 previous_speakers = (
-                    f"{previous_speakers}, {name}" if previous_speakers else name
+                    f"{previous_speakers}, {mcr.name}" if previous_speakers else mcr.name
                 )
             else:
-                console.print(f"[red]{name}: {response}[/red]")
+                debate_json.append(entry_dict)
+                console.print(f"[red]{mcr.name}: {mcr.response}[/red]")
+
+    if json_output:
+        result["phases"]["debate"] = debate_json
 
     # --- JUDGE ---
     console.print("\n[bold cyan]JUDGE SYNTHESIS[/bold cyan]")
@@ -161,9 +189,14 @@ async def run_council(
 
     if is_error(judge_response):
         console.print(f"[red]Judge failed: {judge_response}[/red]")
+        if json_output:
+            result["phases"]["judge"] = {"model": judge, "error": judge_response}
+            return result
         return ""
 
     console.print(Panel(Markdown(judge_response), title="[bold green]Judge[/bold green]", border_style="green"))
+    if json_output:
+        result["phases"]["judge"] = {"model": judge, "response": judge_response}
 
     # --- CRITIQUE ---
     if not no_critic:
@@ -181,8 +214,14 @@ async def run_council(
                 title="[bold yellow]Critique[/bold yellow]",
                 border_style="yellow",
             ))
+            if json_output:
+                result["phases"]["critique"] = {"model": str(critique), "response": critique_response}
 
     duration = time.monotonic() - start
     console.print(f"\n[dim]({duration:.1f}s)[/dim]")
+
+    if json_output:
+        result["duration_s"] = round(duration, 1)
+        return result
 
     return judge_response

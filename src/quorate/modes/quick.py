@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
+from typing import Any
 
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 
 from quorate.api import run_parallel
-from quorate.config import Message, ModelEntry, ReasoningEffort, is_error, quick_models
+from quorate.config import Message, ModelEntry, ReasoningEffort, quick_models
 
 
 async def run_quick(
@@ -20,7 +20,8 @@ async def run_quick(
     timeout: float = 90,
     effort: ReasoningEffort | None = None,
     console: Console | None = None,
-) -> str:
+    json_output: bool = False,
+) -> str | dict[str, Any]:
     """Run quick parallel query across all models."""
     console = console or Console()
     models = models or quick_models()
@@ -34,13 +35,23 @@ async def run_quick(
 
     duration = time.monotonic() - start
     transcript_parts = []
+    responses_json: list[dict[str, str]] = []
 
-    for name, model_used, response in results:
-        if is_error(response):
-            console.print(f"[red]{name}: {response}[/red]")
+    for mcr in results:
+        if mcr.is_error:
+            console.print(f"[red]{mcr.name}: {mcr.response}[/red]")
         else:
-            console.print(Panel(Markdown(response), title=f"[bold]{name}[/bold]", border_style="dim"))
-            transcript_parts.append(f"### {name}\n{response}")
+            console.print(Panel(Markdown(mcr.response), title=f"[bold]{mcr.name}[/bold]", border_style="dim"))
+            transcript_parts.append(f"### {mcr.name}\n{mcr.response}")
+        responses_json.append(mcr.to_dict())
 
     console.print(f"\n[dim]({duration:.1f}s)[/dim]")
+
+    if json_output:
+        return {
+            "question": question,
+            "responses": responses_json,
+            "duration_s": round(duration, 1),
+        }
+
     return "\n\n".join(transcript_parts)
