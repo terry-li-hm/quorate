@@ -53,8 +53,6 @@ async def run_council(
     judge_model: str | None = None,
     critic_model: str | None = None,
     no_critic: bool = False,
-    domain: str | None = None,
-    persona: str | None = None,
     console: Console | None = None,
     json_output: bool = False,
 ) -> str | dict[str, Any]:
@@ -62,7 +60,11 @@ async def run_council(
 
     Returns judge_response (str) normally, or structured dict when json_output=True.
     """
-    console = console or Console()
+    import sys
+    if json_output:
+        console = console or Console(file=sys.stderr)
+    else:
+        console = console or Console()
     models = models or resolved_council()
     judge = resolved_judge(judge_model)
     critique = resolved_critique(critic_model)

@@ -164,6 +164,8 @@ async def _openai(
 ) -> ProviderResult:
     bare = model.removeprefix("openai/")
     body: dict = {"model": bare, "messages": [m.to_dict() for m in messages], "max_tokens": max_tokens}
+    if effort:
+        body["reasoning_effort"] = effort.value if hasattr(effort, "value") else str(effort)
     try:
         resp = await client.post("https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}"}, json=body, timeout=timeout)
@@ -237,6 +239,7 @@ async def _claude_print(model: str, messages: list[Message], timeout: float) -> 
     prompt = "\n\n".join(sections)
     if not prompt:
         return f"[Error: Empty prompt for {bare}]", None
+    proc = None
     try:
         proc = await asyncio.wait_for(
             asyncio.create_subprocess_exec(
@@ -246,6 +249,8 @@ async def _claude_print(model: str, messages: list[Message], timeout: float) -> 
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except (asyncio.TimeoutError, FileNotFoundError) as exc:
+        if proc is not None:
+            proc.kill()
         return f"[Error: claude --print {bare}: {exc}]", None
     if proc.returncode != 0:
         return f"[Error: claude --print {bare}: {(stderr or b'').decode().strip() or f'exit {proc.returncode}'}]", None
@@ -294,6 +299,8 @@ async def query_model(
     """
     model_name = entry.model.rsplit("/", 1)[-1]
     provider = _detect_provider(entry.model)
+    if is_thinking_model(entry.model):
+        timeout = max(timeout, 180)
     start = time.monotonic()
 
     def _result(content: str, used_provider: str, tokens: dict[str, int] | None = None) -> ModelCallResult:
@@ -309,33 +316,40 @@ async def query_model(
         content, tokens = await _claude_print(entry.model, messages, timeout)
         if not is_error(content):
             return _result(content, "claude-print", tokens)
-        if keys.get("anthropic"):
-            content, tokens = await _anthropic(client, keys["anthropic"], entry.model, messages, max_tokens, timeout, effort)
+        anthropic_key = keys.get("anthropic")
+        if anthropic_key:
+            content, tokens = await _anthropic(client, anthropic_key, entry.model, messages, max_tokens, timeout, effort)
             if not is_error(content):
                 return _result(content, "anthropic-api", tokens)
 
-    elif provider == "google" and keys.get("google"):
-        content, tokens = await _google(client, keys["google"], entry.model, messages, max_tokens, timeout, effort)
-        if not is_error(content):
-            return _result(content, "google-ai-studio", tokens)
+    elif provider == "google":
+        google_key = keys.get("google")
+        if google_key:
+            content, tokens = await _google(client, google_key, entry.model, messages, max_tokens, timeout, effort)
+            if not is_error(content):
+                return _result(content, "google-ai-studio", tokens)
 
-    elif provider == "xai" and keys.get("xai"):
-        content, tokens = await _xai(client, keys["xai"], entry.model, messages, max_tokens, timeout, effort)
-        if not is_error(content):
-            return _result(content, "xai-native", tokens)
+    elif provider == "xai":
+        xai_key = keys.get("xai")
+        if xai_key:
+            content, tokens = await _xai(client, xai_key, entry.model, messages, max_tokens, timeout, effort)
+            if not is_error(content):
+                return _result(content, "xai-native", tokens)
 
     elif provider == "openai":
         content, tokens = await _codex_exec(entry.model, messages, timeout)
         if not is_error(content):
             return _result(content, "codex-exec", tokens)
-        if keys.get("openai"):
-            content, tokens = await _openai(client, keys["openai"], entry.model, messages, max_tokens, timeout, effort)
+        openai_key = keys.get("openai")
+        if openai_key:
+            content, tokens = await _openai(client, openai_key, entry.model, messages, max_tokens, timeout, effort)
             if not is_error(content):
                 return _result(content, "openai-api", tokens)
 
     # OpenRouter fallback
-    if keys.get("openrouter"):
-        content, tokens = await _openrouter(client, keys["openrouter"], entry.model, messages, max_tokens, timeout, effort)
+    openrouter_key = keys.get("openrouter")
+    if openrouter_key:
+        content, tokens = await _openrouter(client, openrouter_key, entry.model, messages, max_tokens, timeout, effort)
         if not is_error(content):
             return _result(content, "openrouter", tokens)
 
@@ -382,19 +396,22 @@ async def query_judge(
     keys = api_keys()
     provider = _detect_provider(model)
     async with httpx.AsyncClient() as client:
-        if provider == "google" and keys.get("google"):
-            content, _tokens = await _google(client, keys["google"], model, messages, max_tokens, timeout, effort)
+        google_key = keys.get("google")
+        if provider == "google" and google_key:
+            content, _ = await _google(client, google_key, model, messages, max_tokens, timeout, effort)
             if not is_error(content):
                 return content
         if provider == "anthropic":
-            content, _tokens = await _claude_print(model, messages, timeout)
+            content, _ = await _claude_print(model, messages, timeout)
             if not is_error(content):
                 return content
-            if keys.get("anthropic"):
-                content, _tokens = await _anthropic(client, keys["anthropic"], model, messages, max_tokens, timeout, effort)
+            anthropic_key = keys.get("anthropic")
+            if anthropic_key:
+                content, _ = await _anthropic(client, anthropic_key, model, messages, max_tokens, timeout, effort)
                 if not is_error(content):
                     return content
-        if keys.get("openrouter"):
-            content, _tokens = await _openrouter(client, keys["openrouter"], model, messages, max_tokens, timeout, effort)
+        openrouter_key = keys.get("openrouter")
+        if openrouter_key:
+            content, _ = await _openrouter(client, openrouter_key, model, messages, max_tokens, timeout, effort)
             return content
     return f"[Error: No providers available for judge {model}]"

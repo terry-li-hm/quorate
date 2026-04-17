@@ -115,4 +115,4 @@ class TestCouncilResolution:
         assert "gemini" in resolved_judge().lower()
 
     def test_critique_default(self):
-        assert "sonnet" in resolved_critique().lower()
+        assert "opus" in resolved_critique().lower()

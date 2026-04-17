@@ -67,7 +67,7 @@ ANTHROPIC_VERSION = "2023-06-01"
 
 # Default models
 JUDGE_MODEL = "google/gemini-3.1-pro-preview"
-CRITIQUE_MODEL = "anthropic/claude-sonnet-4-6"
+CRITIQUE_MODEL = "anthropic/claude-opus-4-6"
 CLASSIFIER_MODEL = "anthropic/claude-opus-4-6"
 XAI_DEFAULT_MODEL = "grok-4.20-0309-reasoning"
 
@@ -103,7 +103,7 @@ def resolved_council() -> list[ModelEntry]:
         ModelEntry(_display_name(model_2), model_2),
         ModelEntry(_xai_label(xai_model), model_3),
         ModelEntry(_display_name(model_4), model_4),
-        ModelEntry(_display_name("z-ai/glm-5.1"), "z-ai/glm-5.1"),
+        ModelEntry(_display_name(model_5), model_5),
     ]
 
 
