@@ -20,6 +20,7 @@ from quorate.config import (
     resolved_critique,
     resolved_judge,
 )
+from porin import stream_event
 from quorate.prompts import (
     BLIND_SYSTEM,
     CHALLENGER_ADDITION,
@@ -92,6 +93,8 @@ async def run_council(
         else:
             blind_json.append(mcr.to_dict())
             console.print(f"[red]{mcr.name}: {mcr.response}[/red]")
+        if json_output:
+            stream_event("blind", mcr.to_dict())
 
     if json_output:
         result["phases"]["blind"] = blind_json
@@ -166,6 +169,8 @@ async def run_council(
             else:
                 debate_json.append(entry_dict)
                 console.print(f"[red]{mcr.name}: {mcr.response}[/red]")
+            if json_output:
+                stream_event("debate", entry_dict)
 
     if json_output:
         result["phases"]["debate"] = debate_json
@@ -195,8 +200,10 @@ async def run_council(
         return ""
 
     console.print(Panel(Markdown(judge_response), title="[bold green]Judge[/bold green]", border_style="green"))
+    judge_data = {"model": judge, "response": judge_response}
     if json_output:
-        result["phases"]["judge"] = {"model": judge, "response": judge_response}
+        result["phases"]["judge"] = judge_data
+        stream_event("judge", judge_data)
 
     # --- CRITIQUE ---
     if not no_critic:
@@ -214,8 +221,10 @@ async def run_council(
                 title="[bold yellow]Critique[/bold yellow]",
                 border_style="yellow",
             ))
+            critique_data = {"model": str(critique), "response": critique_response}
             if json_output:
-                result["phases"]["critique"] = {"model": str(critique), "response": critique_response}
+                result["phases"]["critique"] = critique_data
+                stream_event("critique", critique_data)
 
     duration = time.monotonic() - start
     console.print(f"\n[dim]({duration:.1f}s)[/dim]")

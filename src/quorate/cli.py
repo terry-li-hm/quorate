@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-import sys
 from pathlib import Path
 from typing import Annotated
 
 import cyclopts
+from porin import EXIT_ERROR, action, emit_err, emit_ok
 from rich.console import Console
 
 from quorate import __version__
@@ -51,19 +51,27 @@ def _resolve_context(context: tuple[str, ...]) -> str | None:
 
 
 def _write_output(
-    output: Path | None, result: str | dict | None,
+    command: str, output: Path | None, result: str | dict | None,
     console: Console, json_output: bool,
 ) -> None:
-    """Write result to file or stdout."""
+    """Write result to file or stdout using porin envelope."""
     if not result:
+        if json_output:
+            emit_err(command, "No result produced", EXIT_ERROR,
+                     fix="Check model availability with: quorate quick 'test'")
         return
     if json_output:
-        content = json.dumps(result, indent=2, ensure_ascii=False)
-        if output:
-            output.write_text(content + "\n")
-            Console().print(f"[dim]→ {output}[/dim]")
+        data = result if isinstance(result, dict) else {"response": result}
+        next_actions = [
+            action(f"quorate redteam --context <file>", "Stress-test the synthesis"),
+        ]
+        if not output:
+            emit_ok(command, data, next_actions)
         else:
-            sys.stdout.write(content + "\n")
+            from porin import ok
+            envelope = ok(command, data, next_actions)
+            output.write_text(json.dumps(envelope, indent=2, ensure_ascii=False) + "\n")
+            Console().print(f"[dim]→ {output}[/dim]")
     elif output:
         output.write_text(console.export_text())
         Console().print(f"[dim]→ {output}[/dim]")
@@ -177,7 +185,7 @@ def quick(
         effort=_resolve_effort(effort), console=console,
         json_output=json_output,
     ))
-    _write_output(output, result, console, json_output)
+    _write_output("quorate quick", output, result, console, json_output)
 
 
 @app.command
@@ -214,7 +222,7 @@ def council(
         domain=domain, persona=persona, console=console,
         json_output=json_output,
     ))
-    _write_output(output, result, console, json_output)
+    _write_output("quorate council", output, result, console, json_output)
 
 
 def _preset_cmd(name: str):
