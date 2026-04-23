@@ -11,7 +11,7 @@ uv run pytest assays/ -x -v
 
 ## Architecture
 
-- `src/quorate/config.py` — model definitions, API key resolution (env → 1Password fallback), constants
+- `src/quorate/config.py` — model definitions, API key resolution (pure env vars, injected by `op run`), constants
 - `src/quorate/api.py` — HTTP clients (native provider first, OpenRouter fallback), parallel queries
 - `src/quorate/prompts.py` — all prompt templates
 - `src/quorate/modes/quick.py` — parallel queries, no debate
@@ -24,8 +24,8 @@ uv run pytest assays/ -x -v
 - **Claude via `claude --print`** (Max subscription, $0) — first fallback for Anthropic models
 - **GPT via `codex exec`** (Pro subscription, $0) — first fallback for OpenAI models, uses `model_reasoning_effort="xhigh"`
 - **Gemini via `gemini -p`** (Gemini subscription, $0) — first fallback for Google models
-- **ZhiPu native** — direct API at `open.bigmodel.cn/api/paas/v4`, free tier for GLM models
-- **1Password auto-resolve:** `_op_read()` in config.py fills missing API keys from Agents vault
+- **ZhiPu native** — direct API at `open.bigmodel.cn/api/coding/paas/v4` (coding plan, free GLM-5.1)
+- **API keys via `op run`:** effector wrapper injects keys from `quorate.env.op` at startup — no 1Password code in Python
 - **Presets:** redteam/premortem/oxford/discuss are thin wrappers over council with preset context prompts
 
 ## Models (6)
@@ -44,5 +44,6 @@ uv run pytest assays/ -x -v
 - OpenRouter returns 403 for OpenAI/Google/Anthropic models from HK IP — must use native APIs
 - `codex exec` needs `-c 'model_reasoning_effort="xhigh"'` and `--skip-git-repo-check`
 - `codex exec` strips `-pro` suffix from model name (uses base model names)
-- `op item get` works with parentheses in names; `op read` doesn't
+- Gemini CLI needs `GEMINI_HOME=~/.gemini-headless` to skip hooks (stdout pollution + latency)
+- Gemini `-o json` output may have prepended text — scan for first `{`
 - Thinking models need longer timeouts (180s+) in parallel execution
