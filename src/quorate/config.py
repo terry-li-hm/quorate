@@ -60,7 +60,7 @@ class ModelCallResult:
 # API endpoints
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 GOOGLE_AI_STUDIO_URL = "https://generativelanguage.googleapis.com/v1beta/models"
-ZHIPU_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+ZHIPU_URL = "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions"
 XAI_URL = "https://api.x.ai/v1/chat/completions"
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
@@ -199,7 +199,7 @@ def _op_read(item: str) -> str | None:
     try:
         result = subprocess.run(
             ["op", "item", "get", item, "--vault=Agents", "--fields=credential", "--reveal"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True, text=True, timeout=15,
         )
         val = result.stdout.strip()
         return val if val else None
@@ -212,6 +212,7 @@ _OP_ITEMS = {
     "openrouter": "OpenRouter API Key (quorate)",
     "google": "Google AI Studio Key (quorate)",
     "xai": "xAI API Key (quorate)",
+    "zhipu": "zhipu-api-key",
 }
 
 
