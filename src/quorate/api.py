@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import time
 
@@ -283,11 +284,14 @@ async def _gemini_prompt(model: str, messages: list[Message], timeout: float) ->
     if not prompt:
         return f"[Error: Empty prompt for gemini {bare}]", None
     proc = None
+    # Use headless config (no hooks) to avoid stdout pollution and latency
+    env = {**os.environ, "GEMINI_HOME": os.path.expanduser("~/.gemini-headless")}
     try:
         proc = await asyncio.wait_for(
             asyncio.create_subprocess_exec(
                 "gemini", "-p", prompt, "-m", bare, "-o", "json",
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                env=env,
             ), timeout=timeout,
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
@@ -297,10 +301,13 @@ async def _gemini_prompt(model: str, messages: list[Message], timeout: float) ->
         return f"[Error: gemini -p {bare}: {exc}]", None
     if proc.returncode != 0:
         return f"[Error: gemini -p {bare}: {(stderr or b'').decode().strip() or f'exit {proc.returncode}'}]", None
+    raw = stdout.decode()
+    # Gemini hooks may prepend text before JSON — scan for first '{'
+    json_start = raw.find("{")
     try:
-        data = json.loads(stdout.decode())
-    except json.JSONDecodeError:
-        result = stdout.decode().strip()
+        data = json.loads(raw[json_start:]) if json_start >= 0 else json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        result = raw.strip()
         return (result if result else f"[No response from gemini {bare}]"), None
     result = (data.get("response") or "").strip()
     if not result:
