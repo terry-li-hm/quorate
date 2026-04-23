@@ -17,6 +17,7 @@ from quorate.config import (
     ModelCallResult,
     OPENROUTER_URL,
     XAI_URL,
+    ZHIPU_URL,
     Message,
     ModelEntry,
     ReasoningEffort,
@@ -269,7 +270,77 @@ async def _claude_print(model: str, messages: list[Message], timeout: float) -> 
     return _strip_think(result), tokens
 
 
-# --- Routing ---
+async def _gemini_prompt(model: str, messages: list[Message], timeout: float) -> ProviderResult:
+    """Query Gemini CLI -p mode (Gemini subscription, $0)."""
+    bare = model.removeprefix("google/")
+    sections = []
+    for msg in messages:
+        text = msg.content.strip()
+        if not text:
+            continue
+        sections.append(f"Previous response:\n{text}" if msg.role == "assistant" else text)
+    prompt = "\n\n".join(sections)
+    if not prompt:
+        return f"[Error: Empty prompt for gemini {bare}]", None
+    proc = None
+    try:
+        proc = await asyncio.wait_for(
+            asyncio.create_subprocess_exec(
+                "gemini", "-p", prompt, "-m", bare, "-o", "json",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            ), timeout=timeout,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except (asyncio.TimeoutError, FileNotFoundError) as exc:
+        if proc is not None:
+            proc.kill()
+        return f"[Error: gemini -p {bare}: {exc}]", None
+    if proc.returncode != 0:
+        return f"[Error: gemini -p {bare}: {(stderr or b'').decode().strip() or f'exit {proc.returncode}'}]", None
+    try:
+        data = json.loads(stdout.decode())
+    except json.JSONDecodeError:
+        result = stdout.decode().strip()
+        return (result if result else f"[No response from gemini {bare}]"), None
+    result = (data.get("response") or "").strip()
+    if not result:
+        return f"[No response from gemini {bare}]", None
+    stats = data.get("stats", {}).get("models", {})
+    tokens = None
+    for _model_name, model_stats in stats.items():
+        t = model_stats.get("tokens", {})
+        if t.get("candidates"):
+            tokens = {"tokens_in": t.get("input"), "tokens_out": t.get("candidates")}
+            break
+    return _strip_think(result), tokens
+
+
+async def _zhipu(
+    client: httpx.AsyncClient, api_key: str, model: str,
+    messages: list[Message], max_tokens: int, timeout: float,
+    effort: ReasoningEffort | None,
+) -> ProviderResult:
+    """Query ZhiPu API directly (free tier)."""
+    body: dict = {"model": model, "messages": [m.to_dict() for m in messages], "max_tokens": max_tokens}
+    try:
+        resp = await client.post(
+            ZHIPU_URL,
+            headers={"Authorization": f"Bearer {api_key}"},
+            json=body, timeout=timeout,
+        )
+    except (httpx.TimeoutException, httpx.ConnectError) as exc:
+        return f"[Error: zhipu {model}: {exc}]", None
+    if resp.status_code != 200:
+        return f"[Error: HTTP {resp.status_code} from zhipu {model}]", None
+    data = resp.json()
+    if "error" in data:
+        return f"[Error: {data['error'].get('message', 'Unknown')}]", None
+    usage = data.get("usage")
+    tokens = {"tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")} if usage else None
+    choices = data.get("choices", [])
+    content = (choices[0].get("message") or {}).get("content", "").strip() if choices else ""
+    text = _strip_think(content) if content else f"[No response from zhipu {model}]"
+    return text, tokens
 
 
 def _detect_provider(model: str) -> str:
@@ -282,6 +353,8 @@ def _detect_provider(model: str) -> str:
         return "xai"
     if "openai/" in model or "gpt" in model:
         return "openai"
+    if "glm" in model or "zhipu" in model:
+        return "zhipu"
     return "openrouter"
 
 
@@ -323,6 +396,9 @@ async def query_model(
                 return _result(content, "anthropic-api", tokens)
 
     elif provider == "google":
+        content, tokens = await _gemini_prompt(entry.model, messages, timeout)
+        if not is_error(content):
+            return _result(content, "gemini-cli", tokens)
         google_key = keys.get("google")
         if google_key:
             content, tokens = await _google(client, google_key, entry.model, messages, max_tokens, timeout, effort)
@@ -345,6 +421,13 @@ async def query_model(
             content, tokens = await _openai(client, openai_key, entry.model, messages, max_tokens, timeout, effort)
             if not is_error(content):
                 return _result(content, "openai-api", tokens)
+
+    elif provider == "zhipu":
+        zhipu_key = keys.get("zhipu")
+        if zhipu_key:
+            content, tokens = await _zhipu(client, zhipu_key, entry.model, messages, max_tokens, timeout, effort)
+            if not is_error(content):
+                return _result(content, "zhipu-native", tokens)
 
     # OpenRouter fallback
     openrouter_key = keys.get("openrouter")
@@ -396,11 +479,15 @@ async def query_judge(
     keys = api_keys()
     provider = _detect_provider(model)
     async with httpx.AsyncClient() as client:
-        google_key = keys.get("google")
-        if provider == "google" and google_key:
-            content, _ = await _google(client, google_key, model, messages, max_tokens, timeout, effort)
+        if provider == "google":
+            content, _ = await _gemini_prompt(model, messages, timeout)
             if not is_error(content):
                 return content
+            google_key = keys.get("google")
+            if google_key:
+                content, _ = await _google(client, google_key, model, messages, max_tokens, timeout, effort)
+                if not is_error(content):
+                    return content
         if provider == "anthropic":
             content, _ = await _claude_print(model, messages, timeout)
             if not is_error(content):
@@ -408,6 +495,12 @@ async def query_judge(
             anthropic_key = keys.get("anthropic")
             if anthropic_key:
                 content, _ = await _anthropic(client, anthropic_key, model, messages, max_tokens, timeout, effort)
+                if not is_error(content):
+                    return content
+        if provider == "zhipu":
+            zhipu_key = keys.get("zhipu")
+            if zhipu_key:
+                content, _ = await _zhipu(client, zhipu_key, model, messages, max_tokens, timeout, effort)
                 if not is_error(content):
                     return content
         openrouter_key = keys.get("openrouter")

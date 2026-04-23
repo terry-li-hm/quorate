@@ -20,9 +20,11 @@ uv run pytest assays/ -x -v
 
 ## Key Patterns
 
-- **Provider routing:** `_detect_provider()` → try native API (Google/Anthropic/xAI/OpenAI) → OpenRouter fallback
+- **Provider routing:** `_detect_provider()` → try native API (Google/Anthropic/xAI/OpenAI/ZhiPu) → OpenRouter fallback
 - **Claude via `claude --print`** (Max subscription, $0) — first fallback for Anthropic models
 - **GPT via `codex exec`** (Pro subscription, $0) — first fallback for OpenAI models, uses `model_reasoning_effort="xhigh"`
+- **Gemini via `gemini -p`** (Gemini subscription, $0) — first fallback for Google models
+- **ZhiPu native** — direct API at `open.bigmodel.cn/api/paas/v4`, free tier for GLM models
 - **1Password auto-resolve:** `_op_read()` in config.py fills missing API keys from Agents vault
 - **Presets:** redteam/premortem/oxford/discuss are thin wrappers over council with preset context prompts
 
@@ -30,12 +32,12 @@ uv run pytest assays/ -x -v
 
 | Model | Provider | Display Name |
 |-------|----------|-------------|
-| google/gemini-3.1-pro-preview | Google AI Studio | Gemini-3.1-Pro |
+| google/gemini-3.1-pro-preview | gemini -p / Google AI Studio | Gemini-3.1-Pro |
 | openai/gpt-5.4-pro | Codex exec | GPT-5.4-Pro |
 | anthropic/claude-opus-4-6 | claude --print | Claude-Opus-4-6 |
 | x-ai/grok-4.20-0309-reasoning | xAI native | Grok-4.20β |
 | qwen/qwen3.6-plus | OpenRouter | Qwen3.6-Plus |
-| z-ai/glm-5.1 | OpenRouter | GLM-5.1 |
+| z-ai/glm-5.1 | ZhiPu native | GLM-5.1 |
 
 ## Gotchas
 

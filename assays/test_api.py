@@ -37,8 +37,11 @@ class TestDetectProvider:
     def test_deepseek_openrouter(self):
         assert _detect_provider("deepseek/deepseek-v3.2") == "openrouter"
 
-    def test_glm_openrouter(self):
-        assert _detect_provider("z-ai/glm-5.1") == "openrouter"
+    def test_glm_zhipu(self):
+        assert _detect_provider("z-ai/glm-5.1") == "zhipu"
+
+    def test_zhipu_bare(self):
+        assert _detect_provider("zhipu/glm-4-flash") == "zhipu"
 
     def test_qwen_openrouter(self):
         assert _detect_provider("qwen/qwen3.6-plus") == "openrouter"

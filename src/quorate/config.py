@@ -60,7 +60,7 @@ class ModelCallResult:
 # API endpoints
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 GOOGLE_AI_STUDIO_URL = "https://generativelanguage.googleapis.com/v1beta/models"
-BIGMODEL_URL = "https://api.z.ai/api/paas/v4/chat/completions"
+ZHIPU_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
 XAI_URL = "https://api.x.ai/v1/chat/completions"
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
