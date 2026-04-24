@@ -105,11 +105,11 @@ class TestMessage:
 
 
 class TestCouncilResolution:
-    def test_council_returns_5(self):
-        assert len(resolved_council()) == 5
+    def test_council_returns_6(self):
+        assert len(resolved_council()) == 6
 
-    def test_quick_returns_6(self):
-        assert len(quick_models()) == 6
+    def test_quick_returns_7(self):
+        assert len(quick_models()) == 7
 
     def test_judge_default(self):
         assert "gemini" in resolved_judge().lower()

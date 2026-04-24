@@ -241,12 +241,15 @@ async def _claude_print(model: str, messages: list[Message], timeout: float) -> 
     prompt = "\n\n".join(sections)
     if not prompt:
         return f"[Error: Empty prompt for {bare}]", None
+    # Strip ANTHROPIC_API_KEY so claude --print uses Max subscription, not depleted API credits
+    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
     proc = None
     try:
         proc = await asyncio.wait_for(
             asyncio.create_subprocess_exec(
                 "claude", "--model", bare, "--print", "--output-format", "json", "-p", prompt,
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                env=env,
             ), timeout=timeout,
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)

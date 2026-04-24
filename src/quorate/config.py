@@ -67,8 +67,8 @@ ANTHROPIC_VERSION = "2023-06-01"
 
 # Default models
 JUDGE_MODEL = "google/gemini-3.1-pro-preview"
-CRITIQUE_MODEL = "anthropic/claude-opus-4-6"
-CLASSIFIER_MODEL = "anthropic/claude-opus-4-6"
+CRITIQUE_MODEL = "anthropic/claude-opus-4-7"
+CLASSIFIER_MODEL = "anthropic/claude-opus-4-7"
 XAI_DEFAULT_MODEL = "grok-4.20-0309-reasoning"
 
 
@@ -80,9 +80,9 @@ def _env(var: str) -> str | None:
 def _normalize_model(value: str) -> str:
     match value.strip().lower():
         case "sonnet":
-            return "anthropic/claude-sonnet-4-6"
+            return "anthropic/claude-sonnet-4-7"
         case "opus":
-            return "anthropic/claude-opus-4-6"
+            return "anthropic/claude-opus-4-7"
         case "gemini":
             return "google/gemini-3.1-pro-preview"
         case _:
@@ -94,8 +94,9 @@ def resolved_council() -> list[ModelEntry]:
     model_1 = _env("CONSILIUM_MODEL_M1") or "openai/gpt-5.4-pro"
     model_2 = _env("CONSILIUM_MODEL_M2") or "anthropic/claude-opus-4-6"
     model_3 = _env("CONSILIUM_MODEL_M3") or "x-ai/grok-4.20-0309-reasoning"
-    model_4 = _env("CONSILIUM_MODEL_M4") or "qwen/qwen3.6-plus"
+    model_4 = _env("CONSILIUM_MODEL_M4") or "moonshotai/kimi-k2.6"
     model_5 = _env("CONSILIUM_MODEL_M5") or "glm-5.1"
+    model_6 = _env("CONSILIUM_MODEL_M6") or "xiaomi/mimo-v2.5-pro"
     xai_model = _env("CONSILIUM_XAI_MODEL") or XAI_DEFAULT_MODEL
 
     return [
@@ -104,6 +105,7 @@ def resolved_council() -> list[ModelEntry]:
         ModelEntry(_xai_label(xai_model), model_3),
         ModelEntry(_display_name(model_4), model_4),
         ModelEntry(_display_name(model_5), model_5),
+        ModelEntry(_display_name(model_6), model_6),
     ]
 
 
@@ -142,6 +144,10 @@ def _display_name(model_id: str) -> str:
                 result.append("GLM")
             case "deepseek":
                 result.append("DeepSeek")
+            case "kimi":
+                result.append("Kimi")
+            case "mimo":
+                result.append("MiMo")
             case _:
                 result.append(part[0].upper() + part[1:])
     return "-".join(result)
@@ -155,8 +161,10 @@ def _xai_label(model: str) -> str:
 
 
 THINKING_MODELS = {
-    "claude-opus-4-6", "claude-opus-4.5", "gpt-5.4-pro", "gpt-5.4", "gpt-5.2-pro", "gpt-5.2",
+    "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4.5",
+    "gpt-5.5", "gpt-5.4-pro", "gpt-5.4", "gpt-5.2-pro", "gpt-5.2",
     "gemini-3.1-pro-preview", "grok-4", "deepseek-r1", "glm-5", "glm-5.1",
+    "kimi-k2.6", "mimo-v2.5-pro",
 }
 
 
@@ -177,6 +185,10 @@ def model_max_tokens(model: str) -> int:
         return 16384
     if "grok" in lower or "xai" in lower:
         return 32768
+    if "mimo" in lower or "xiaomi" in lower:
+        return 32768
+    if "kimi" in lower or "moonshot" in lower:
+        return 16384
     if "glm" in lower or "zhipu" in lower:
         return 16000
     return 8192

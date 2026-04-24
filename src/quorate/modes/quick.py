@@ -45,12 +45,18 @@ async def run_quick(
             transcript_parts.append(f"### {mcr.name}\n{mcr.response}")
         responses_json.append(mcr.to_dict())
 
+    failed = [mcr for mcr in results if mcr.is_error]
+    if failed:
+        names = ", ".join(mcr.name for mcr in failed)
+        console.print(f"\n[bold red]⚠ {len(failed)}/{len(results)} models failed: {names}[/bold red]")
+
     console.print(f"\n[dim]({duration:.1f}s)[/dim]")
 
     if json_output:
         return {
             "question": question,
             "responses": responses_json,
+            "failed_count": len(failed),
             "duration_s": round(duration, 1),
         }
 

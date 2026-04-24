@@ -28,7 +28,7 @@ uv run pytest assays/ -x -v
 - **API keys via `op run`:** effector wrapper injects keys from `quorate.env.op` at startup — no 1Password code in Python
 - **Presets:** redteam/premortem/oxford/discuss are thin wrappers over council with preset context prompts
 
-## Models (6)
+## Models (7)
 
 | Model | Provider | Display Name |
 |-------|----------|-------------|
@@ -36,14 +36,15 @@ uv run pytest assays/ -x -v
 | openai/gpt-5.4-pro | Codex exec | GPT-5.4-Pro |
 | anthropic/claude-opus-4-6 | claude --print | Claude-Opus-4-6 |
 | x-ai/grok-4.20-0309-reasoning | xAI native | Grok-4.20β |
-| qwen/qwen3.6-plus | OpenRouter | Qwen3.6-Plus |
-| z-ai/glm-5.1 | ZhiPu native | GLM-5.1 |
+| moonshotai/kimi-k2.6 | OpenRouter | Kimi-K2.6 |
+| glm-5.1 | ZhiPu native | GLM-5.1 |
+| xiaomi/mimo-v2.5-pro | OpenRouter | MiMo-V2.5-Pro |
 
 ## Gotchas
 
 - OpenRouter returns 403 for OpenAI/Google/Anthropic models from HK IP — must use native APIs
 - `codex exec` needs `-c 'model_reasoning_effort="xhigh"'` and `--skip-git-repo-check`
-- `codex exec` strips `-pro` suffix from model name (uses base model names)
+- `codex exec` strips `-pro` suffix from model name (uses base model names). GPT-5.5 has no -pro variant.
 - Gemini CLI needs `GEMINI_HOME=~/.gemini-headless` to skip hooks (stdout pollution + latency)
 - Gemini `-o json` output may have prepended text — scan for first `{`
 - Thinking models need longer timeouts (180s+) in parallel execution

@@ -65,8 +65,19 @@ REQUIREMENTS:
 Your dissent is most valuable when it comes from a genuinely different way of seeing the problem."""
 
 
-JUDGE_SYSTEM = """You are the judge synthesizing this council deliberation.
-
+def judge_system(total_models: int, failed_models: list[str] | None = None) -> str:
+    degradation = ""
+    if failed_models:
+        names = ", ".join(failed_models)
+        degradation = f"""
+PANEL DEGRADATION: {len(failed_models)}/{total_models} models failed to respond ({names}).
+You are synthesizing from a partial panel. Factor this into your confidence:
+- Note which perspectives may be underrepresented
+- Lower your confidence proportionally to missing voices
+- Flag if the missing models could have changed the conclusion
+"""
+    return f"""You are the judge synthesizing this council deliberation.
+{degradation}
 SYNTHESIS METHOD: List 2-3 competing conclusions that emerged. For each argument in the debate, evaluate which conclusion it supports. Eliminate conclusions inconsistent with the strongest reasoning. The surviving conclusion is your recommendation.
 
 Synthesize:
@@ -91,6 +102,7 @@ Your job is to FILTER, not aggregate. Most suggestions are interesting but not n
 A recommendation with 6 action items is a wish list, not a recommendation.
 
 Keep it concise and actionable."""
+
 
 
 CRITIQUE_SYSTEM = """You are the critic reviewing a judge's synthesis of a council deliberation.

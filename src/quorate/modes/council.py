@@ -25,7 +25,7 @@ from quorate.prompts import (
     BLIND_SYSTEM,
     CHALLENGER_ADDITION,
     CRITIQUE_SYSTEM,
-    JUDGE_SYSTEM,
+    judge_system,
     debate_system,
 )
 
@@ -98,8 +98,14 @@ async def run_council(
         if json_output:
             stream_event("blind", mcr.to_dict())
 
+    blind_failed = [mcr for mcr in blind_results if mcr.is_error]
+    if blind_failed:
+        names = ", ".join(mcr.name for mcr in blind_failed)
+        console.print(f"\n[bold red]⚠ {len(blind_failed)}/{len(blind_results)} models failed: {names}[/bold red]")
+
     if json_output:
         result["phases"]["blind"] = blind_json
+        result["failed_count"] = len(blind_failed)
 
     if len(blind_claims) < 2:
         console.print("[red]Too few models responded in blind phase.[/red]")
@@ -186,8 +192,10 @@ async def run_council(
         )
         all_text += f"\n\n--- DEBATE ---\n\n{debate_text}"
 
+    failed_names = [mcr.name for mcr in blind_failed] if blind_failed else None
+    judge_prompt = judge_system(len(models), failed_names)
     judge_messages = [
-        Message.system(JUDGE_SYSTEM),
+        Message.system(judge_prompt),
         Message.user(f"Question: {full_question}\n\n{all_text}"),
     ]
     judge_response = await query_judge(
@@ -229,6 +237,9 @@ async def run_council(
                 stream_event("critique", critique_data)
 
     duration = time.monotonic() - start
+    if blind_failed:
+        names = ", ".join(mcr.name for mcr in blind_failed)
+        console.print(f"\n[bold red]⚠ Partial council: {len(blind_failed)}/{len(blind_results)} models failed ({names})[/bold red]")
     console.print(f"\n[dim]({duration:.1f}s)[/dim]")
 
     if json_output:
