@@ -40,6 +40,17 @@ uv run pytest assays/ -x -v
 | glm-5.1 | ZhiPu native | GLM-5.1 |
 | xiaomi/mimo-v2.5-pro | OpenRouter | MiMo-V2.5-Pro |
 
+## Runtime expectations
+
+- `quorate quick` — 7 parallel queries, ~13-15s total
+- `quorate council --fast` — blind + judge only, skips debate + critic, **~2-3 min** (judge with HIGH reasoning effort dominates)
+- `quorate council` — full 4-phase deliberation, **5-8 min** (default), **12-15 min** with `--deep`
+
+**Caller timeout guidance:**
+- For `council`: outer timeout 600s+ (default), 900s+ with `--deep`
+- From CC or other agents: prefer `run_in_background: true` and read the output file when the task completes
+- Don't run full council on short inputs (<one page) — use `quorate quick` + manual synthesis, or `--fast`
+
 ## Gotchas
 
 - OpenRouter returns 403 for OpenAI/Google/Anthropic models from HK IP — must use native APIs
@@ -48,3 +59,4 @@ uv run pytest assays/ -x -v
 - Gemini CLI needs `GEMINI_HOME=~/.gemini-headless` to skip hooks (stdout pollution + latency)
 - Gemini `-o json` output may have prepended text — scan for first `{`
 - Thinking models need longer timeouts (180s+) in parallel execution
+- Council runtime is dominated by sequential debate phase (~2-3 min for 7 speakers) + judge with 300s timeout — not a bug, just the design

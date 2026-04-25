@@ -200,17 +200,29 @@ def council(
     *,
     context: tuple[str, ...] = (),
     deep: bool = False,
+    fast: bool = False,
     json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
 ) -> None:
-    """Full deliberation — blind phase, debate, judge synthesis, critique."""
+    """Full deliberation — blind phase, debate, judge synthesis, critique.
+
+    --fast skips debate + critique for ~2-3 min runtime; use for short inputs.
+    --deep runs 2 debate rounds (12-15 min); use for substantive papers.
+    Default: 1 debate round + critique (5-8 min).
+    """
     json_output = json_output or _is_agent()
     from quorate.modes.council import run_council
     text = _resolve_question(question)
     resolved_ctx = _resolve_context(context)
-    rounds = 2 if deep else 1
+    if fast:
+        rounds = 0
+    elif deep:
+        rounds = 2
+    else:
+        rounds = 1
     console = Console(quiet=json_output)
     result = asyncio.run(run_council(
         text, context=resolved_ctx, rounds=rounds,
+        no_critic=fast,
         console=console, json_output=json_output,
     ))
     _emit_result("quorate council", result, json_output)
