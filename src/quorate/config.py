@@ -91,8 +91,8 @@ def _normalize_model(value: str) -> str:
 
 def resolved_council() -> list[ModelEntry]:
     """Resolve council models at runtime with env overrides."""
-    model_1 = _env("CONSILIUM_MODEL_M1") or "openai/gpt-5.4-pro"
-    model_2 = _env("CONSILIUM_MODEL_M2") or "anthropic/claude-opus-4-6"
+    model_1 = _env("CONSILIUM_MODEL_M1") or "openai/gpt-5.5"
+    model_2 = _env("CONSILIUM_MODEL_M2") or "anthropic/claude-opus-4-7"
     model_3 = _env("CONSILIUM_MODEL_M3") or "x-ai/grok-4.20-0309-reasoning"
     model_4 = _env("CONSILIUM_MODEL_M4") or "moonshotai/kimi-k2.6"
     model_5 = _env("CONSILIUM_MODEL_M5") or "glm-5.1"

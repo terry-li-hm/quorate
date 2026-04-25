@@ -33,8 +33,8 @@ uv run pytest assays/ -x -v
 | Model | Provider | Display Name |
 |-------|----------|-------------|
 | google/gemini-3.1-pro-preview | gemini -p / Google AI Studio | Gemini-3.1-Pro |
-| openai/gpt-5.4-pro | Codex exec | GPT-5.4-Pro |
-| anthropic/claude-opus-4-6 | claude --print | Claude-Opus-4-6 |
+| openai/gpt-5.5 | Codex exec | GPT-5.5 |
+| anthropic/claude-opus-4-7 | claude --print | Claude-Opus-4-7 |
 | x-ai/grok-4.20-0309-reasoning | xAI native | Grok-4.20β |
 | moonshotai/kimi-k2.6 | OpenRouter | Kimi-K2.6 |
 | glm-5.1 | ZhiPu native | GLM-5.1 |
@@ -55,7 +55,7 @@ uv run pytest assays/ -x -v
 
 - OpenRouter returns 403 for OpenAI/Google/Anthropic models from HK IP — must use native APIs
 - `codex exec` needs `-c 'model_reasoning_effort="xhigh"'` and `--skip-git-repo-check`
-- `codex exec` strips `-pro` suffix from model name (uses base model names). GPT-5.5 has no -pro variant.
+- `codex exec` strips `-pro` suffix from model name (uses base model names). GPT-5.5 has no Codex-accessible -pro variant — `codex exec -m gpt-5.5-pro` returns 400 "not supported when using Codex with a ChatGPT account" (verified 2026-04-26). Use `gpt-5.5` only.
 - Gemini CLI needs `GEMINI_HOME=~/.gemini-headless` to skip hooks (stdout pollution + latency)
 - Gemini `-o json` output may have prepended text — scan for first `{`
 - Thinking models need longer timeouts (180s+) in parallel execution
