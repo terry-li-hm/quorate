@@ -55,7 +55,7 @@ uv run pytest assays/ -x -v
 
 - OpenRouter returns 403 for OpenAI/Google/Anthropic models from HK IP — must use native APIs
 - `codex exec` needs `-c 'model_reasoning_effort="xhigh"'` and `--skip-git-repo-check`
-- `codex exec` strips `-pro` suffix from model name (uses base model names). GPT-5.5 has no Codex-accessible -pro variant — `codex exec -m gpt-5.5-pro` returns 400 "not supported when using Codex with a ChatGPT account" (verified 2026-04-26). Use `gpt-5.5` only.
+- `codex exec` strips `-pro` suffix from model name (uses base model names). `gpt-5.5-pro` is gated to ChatGPT Pro/Business/Enterprise tiers; ChatGPT Plus accounts get a 400 "not supported when using Codex with a ChatGPT account" (verified 2026-04-26). For Plus accounts: use `gpt-5.5`. For Pro variant access: route via OpenRouter (`openai/gpt-5.5-pro` triggers fallback) or upgrade Codex auth to Pro tier.
 - Gemini CLI needs `GEMINI_HOME=~/.gemini-headless` to skip hooks (stdout pollution + latency)
 - Gemini `-o json` output may have prepended text — scan for first `{`
 - Thinking models need longer timeouts (180s+) in parallel execution
