@@ -63,7 +63,7 @@ async def _openrouter(
     usage = data.get("usage")
     tokens = {"tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")} if usage else None
     choices = data.get("choices", [])
-    content = (choices[0].get("message") or {}).get("content", "").strip() if choices else ""
+    content = ((choices[0].get("message") or {}).get("content") or "").strip() if choices else ""
     text = _strip_think(content) if content else f"[No response from {model}]"
     return text, tokens
 
@@ -154,7 +154,7 @@ async def _xai(
     usage = data.get("usage")
     tokens = {"tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")} if usage else None
     choices = data.get("choices", [])
-    content = (choices[0].get("message") or {}).get("content", "").strip() if choices else ""
+    content = ((choices[0].get("message") or {}).get("content") or "").strip() if choices else ""
     text = _strip_think(content) if content else f"[No response from xai {model}]"
     return text, tokens
 
@@ -181,7 +181,7 @@ async def _openai(
     usage = data.get("usage")
     tokens = {"tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")} if usage else None
     choices = data.get("choices", [])
-    content = (choices[0].get("message") or {}).get("content", "").strip() if choices else ""
+    content = ((choices[0].get("message") or {}).get("content") or "").strip() if choices else ""
     text = _strip_think(content) if content else f"[No response from openai {bare}]"
     return text, tokens
 
@@ -348,7 +348,7 @@ async def _zhipu(
     usage = data.get("usage")
     tokens = {"tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")} if usage else None
     choices = data.get("choices", [])
-    content = (choices[0].get("message") or {}).get("content", "").strip() if choices else ""
+    content = ((choices[0].get("message") or {}).get("content") or "").strip() if choices else ""
     text = _strip_think(content) if content else f"[No response from zhipu {model}]"
     return text, tokens
 
