@@ -69,7 +69,7 @@ ANTHROPIC_VERSION = "2023-06-01"
 JUDGE_MODEL = "google/gemini-3.1-pro-preview"
 CRITIQUE_MODEL = "anthropic/claude-opus-4-7"
 CLASSIFIER_MODEL = "anthropic/claude-opus-4-7"
-XAI_DEFAULT_MODEL = "grok-4.20-0309-reasoning"
+XAI_DEFAULT_MODEL = "grok-4.3"
 
 
 def _env(var: str) -> str | None:
@@ -93,7 +93,7 @@ def resolved_council() -> list[ModelEntry]:
     """Resolve council models at runtime with env overrides."""
     model_1 = _env("CONSILIUM_MODEL_M1") or "openai/gpt-5.5"
     model_2 = _env("CONSILIUM_MODEL_M2") or "anthropic/claude-opus-4-7"
-    model_3 = _env("CONSILIUM_MODEL_M3") or "x-ai/grok-4.20-0309-reasoning"
+    model_3 = _env("CONSILIUM_MODEL_M3") or "x-ai/grok-4.3"
     model_4 = _env("CONSILIUM_MODEL_M4") or "moonshotai/kimi-k2.6"
     model_5 = _env("CONSILIUM_MODEL_M5") or "glm-5.1"
     model_6 = _env("CONSILIUM_MODEL_M6") or "xiaomi/mimo-v2.5-pro"
@@ -157,20 +157,26 @@ def _xai_label(model: str) -> str:
     if "4.20" in model:
         suffix = "-NR" if "non-reasoning" in model else ""
         return f"Grok-4.20\u03b2{suffix}"
+    if "4.3" in model:
+        return "Grok-4.3"
     return _display_name(model)
 
 
 THINKING_MODELS = {
     "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4.5",
     "gpt-5.5", "gpt-5.4-pro", "gpt-5.4", "gpt-5.2-pro", "gpt-5.2",
-    "gemini-3.1-pro-preview", "grok-4", "deepseek-r1", "glm-5", "glm-5.1",
+    "gemini-3.1-pro-preview", "grok-4", "grok-4.3", "deepseek-r1", "glm-5", "glm-5.1",
     "kimi-k2.6", "mimo-v2.5-pro",
 }
 
 
 def is_thinking_model(model: str) -> bool:
     name = model.rsplit("/", 1)[-1].lower()
-    return name in THINKING_MODELS or name.startswith("grok-4.2")
+    return (
+        name in THINKING_MODELS
+        or name.startswith("grok-4.2")
+        or name.startswith("grok-4.3")
+    )
 
 
 def model_max_tokens(model: str) -> int:

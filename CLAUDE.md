@@ -35,7 +35,7 @@ uv run pytest assays/ -x -v
 | google/gemini-3.1-pro-preview | gemini -p / Google AI Studio | Gemini-3.1-Pro |
 | openai/gpt-5.5 | Codex exec | GPT-5.5 |
 | anthropic/claude-opus-4-7 | claude --print | Claude-Opus-4-7 |
-| x-ai/grok-4.20-0309-reasoning | xAI native | Grok-4.20β |
+| x-ai/grok-4.3 | xAI native | Grok-4.3 |
 | moonshotai/kimi-k2.6 | OpenRouter | Kimi-K2.6 |
 | glm-5.1 | ZhiPu native | GLM-5.1 |
 | xiaomi/mimo-v2.5-pro | OpenRouter | MiMo-V2.5-Pro |
