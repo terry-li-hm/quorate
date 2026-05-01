@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 
+from quorate import runlog
 from quorate.api import run_parallel
 from quorate.config import Message, ModelEntry, ReasoningEffort, quick_models
 
@@ -50,7 +51,13 @@ async def run_quick(
         names = ", ".join(mcr.name for mcr in failed)
         console.print(f"\n[bold red]⚠ {len(failed)}/{len(results)} models failed: {names}[/bold red]")
 
-    console.print(f"\n[dim]({duration:.1f}s)[/dim]")
+    record = runlog.build_record(mode="quick", results=results, total_duration_s=duration)
+    runlog.append(record)
+    footer_lines, summary = runlog.format_footer(results, duration)
+    console.print()
+    for line in footer_lines:
+        console.print(f"[dim]{line}[/dim]")
+    console.print(f"[dim]{summary}[/dim]")
 
     if json_output:
         return {

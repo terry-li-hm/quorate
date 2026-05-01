@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 
+from quorate import runlog
 from quorate.api import query_judge, run_parallel
 from quorate.config import (
     Message,
@@ -240,7 +241,18 @@ async def run_council(
     if blind_failed:
         names = ", ".join(mcr.name for mcr in blind_failed)
         console.print(f"\n[bold red]⚠ Partial council: {len(blind_failed)}/{len(blind_results)} models failed ({names})[/bold red]")
-    console.print(f"\n[dim]({duration:.1f}s)[/dim]")
+    record = runlog.build_record(
+        mode="council",
+        results=blind_results,
+        total_duration_s=duration,
+        judge_model=judge,
+    )
+    runlog.append(record)
+    footer_lines, summary = runlog.format_footer(blind_results, duration)
+    console.print()
+    for line in footer_lines:
+        console.print(f"[dim]{line}[/dim]")
+    console.print(f"[dim]{summary}[/dim]")
 
     if json_output:
         result["duration_s"] = round(duration, 1)
