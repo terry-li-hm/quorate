@@ -25,12 +25,14 @@ _tree = CommandTree("quorate")
 _tree.add_command("council", description="Full deliberation — blind phase, debate, judge synthesis, critique", params=[
     {"name": "question", "type": "string", "required": True},
     {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
+    {"name": "--persona", "type": "string", "description": "Stakeholder profile path — all models answer as this principal"},
     {"name": "--deep", "type": "boolean", "default": False, "description": "Force 2+ debate rounds"},
     {"name": "--json", "type": "boolean", "default": False, "description": "Force JSON in TTY (auto in pipes)"},
 ], annotations={"readonly": True})
 _tree.add_command("quick", description="Parallel queries — all models answer independently", params=[
     {"name": "question", "type": "string", "required": True},
     {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
+    {"name": "--persona", "type": "string", "description": "Stakeholder profile path — all models answer as this principal"},
     {"name": "--json", "type": "boolean", "default": False},
 ], annotations={"readonly": True})
 _tree.add_command("redteam", description="Adversarial stress-test — find what breaks", params=[
@@ -87,6 +89,34 @@ def _resolve_context(context: tuple[str, ...]) -> str | None:
         else:
             parts.append(item)
     return "\n\n---\n\n".join(parts)
+
+
+PERSONA_PREFIX = (
+    "PERSONA INSTRUCTION: You are reviewing as the principal whose stakeholder profile follows. "
+    "Adopt this principal's voice, posture, attention budget, decision-thresholds, and what they "
+    "read for. Speak in the first person. Respond as they would respond, not as a generic reviewer. "
+    "Cite the profile fields you are leaning on (e.g. 'profile §Voice — joint threshold development'). "
+    "Do not break character.\n\n"
+    "STAKEHOLDER PROFILE:\n"
+)
+
+
+def _resolve_persona(persona: str | None) -> str | None:
+    """Resolve persona: file path → wrapped persona-prompt text. Returns None if not given."""
+    if not persona:
+        return None
+    path = Path(persona).expanduser()
+    if not path.is_file():
+        Console().print(f"[red]Persona file not found:[/red] {persona}")
+        raise SystemExit(1)
+    return PERSONA_PREFIX + path.read_text().strip()
+
+
+def _merge_persona_context(persona_text: str | None, context_text: str | None) -> str | None:
+    """Prepend persona block to context. Both optional."""
+    if persona_text and context_text:
+        return f"{persona_text}\n\n---\n\n{context_text}"
+    return persona_text or context_text
 
 
 def _emit_result(command: str, result: str | dict | None, json_output: bool) -> None:
@@ -179,13 +209,18 @@ def quick(
     question: str | None = None,
     *,
     context: tuple[str, ...] = (),
+    persona: str | None = None,
     json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
 ) -> None:
-    """Parallel queries — all models answer independently."""
+    """Parallel queries — all models answer independently.
+
+    --persona <profile-path> makes every model answer as the named principal,
+    using the profile as system context. Combine with --context for paper review.
+    """
     json_output = json_output or _is_agent()
     from quorate.modes.quick import run_quick
     text = _resolve_question(question)
-    resolved_ctx = _resolve_context(context)
+    resolved_ctx = _merge_persona_context(_resolve_persona(persona), _resolve_context(context))
     console = Console(quiet=json_output)
     result = asyncio.run(run_quick(
         text, context=resolved_ctx, console=console,
@@ -199,6 +234,7 @@ def council(
     question: str | None = None,
     *,
     context: tuple[str, ...] = (),
+    persona: str | None = None,
     deep: bool = False,
     fast: bool = False,
     json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
@@ -208,11 +244,13 @@ def council(
     --fast skips debate + critique for ~2-3 min runtime; use for short inputs.
     --deep runs 2 debate rounds (12-15 min); use for substantive papers.
     Default: 1 debate round + critique (5-8 min).
+    --persona <profile-path> makes every model debate as the named principal —
+    the profile is loaded as system context, models speak in first person as them.
     """
     json_output = json_output or _is_agent()
     from quorate.modes.council import run_council
     text = _resolve_question(question)
-    resolved_ctx = _resolve_context(context)
+    resolved_ctx = _merge_persona_context(_resolve_persona(persona), _resolve_context(context))
     if fast:
         rounds = 0
     elif deep:
