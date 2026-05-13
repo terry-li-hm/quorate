@@ -21,6 +21,7 @@ from quorate.config import (
     resolved_critique,
     resolved_judge,
 )
+from quorate.heavyskill import prune_cot, shuffle_traces
 from porin import stream_event
 from quorate.prompts import (
     BLIND_SYSTEM,
@@ -44,6 +45,50 @@ def _sanitize(content: str) -> str:
     )
 
 
+def _build_synthesis_text(
+    blind_claims: dict[str, str],
+    conversation: list[tuple[str, str]],
+    *,
+    shuffle_enabled: bool,
+    prune_enabled: bool,
+) -> tuple[str, list[str], int | None]:
+    if not shuffle_enabled and not prune_enabled:
+        all_text = "\n\n".join(
+            f"**{name}** (blind claim): {claim}" for name, claim in blind_claims.items()
+        )
+        if conversation:
+            debate_text = "\n\n".join(f"**{name}**: {text}" for name, text in conversation)
+            all_text += f"\n\n--- DEBATE ---\n\n{debate_text}"
+        return all_text, [], None
+
+    traces: list[dict[str, str]] = []
+    # HeavySkill (Wang et al., ICML 2026, arXiv:2605.02396)
+    for name, claim in blind_claims.items():
+        traces.append({
+            "speaker": name,
+            "label": "blind claim",
+            "content": prune_cot(claim) if prune_enabled else claim,
+        })
+    for name, text in conversation:
+        traces.append({
+            "speaker": name,
+            "label": "debate",
+            "content": prune_cot(text) if prune_enabled else text,
+        })
+
+    shuffle_seed: int | None = None
+    if shuffle_enabled:
+        # HeavySkill (Wang et al., ICML 2026, arXiv:2605.02396)
+        shuffle_seed = time.time_ns()
+        traces = shuffle_traces(traces, seed=shuffle_seed)
+
+    rendered = "\n\n".join(
+        f"**{trace['speaker']}** ({trace['label']}): {trace['content']}" for trace in traces
+    )
+    order = [f"{trace['speaker']} [{trace['label']}]" for trace in traces]
+    return rendered, order, shuffle_seed
+
+
 async def run_council(
     question: str,
     context: str | None = None,
@@ -54,6 +99,8 @@ async def run_council(
     judge_model: str | None = None,
     critic_model: str | None = None,
     no_critic: bool = False,
+    shuffle_traces_enabled: bool = False,
+    prune_cot_enabled: bool = False,
     console: Console | None = None,
     json_output: bool = False,
 ) -> str | dict[str, Any]:
@@ -186,12 +233,14 @@ async def run_council(
 
     # --- JUDGE ---
     console.print("\n[bold cyan]JUDGE SYNTHESIS[/bold cyan]")
-    all_text = blind_summary
-    if conversation:
-        debate_text = "\n\n".join(
-            f"**{name}**: {text}" for name, text in conversation
-        )
-        all_text += f"\n\n--- DEBATE ---\n\n{debate_text}"
+    all_text, trace_order, shuffle_seed = _build_synthesis_text(
+        blind_claims,
+        conversation,
+        shuffle_enabled=shuffle_traces_enabled,
+        prune_enabled=prune_cot_enabled,
+    )
+    if shuffle_traces_enabled and trace_order:
+        console.print(f"[dim]Shuffled synthesis trace order (seed={shuffle_seed}): {' -> '.join(trace_order)}[/dim]")
 
     failed_names = [mcr.name for mcr in blind_failed] if blind_failed else None
     judge_prompt = judge_system(len(models), failed_names)
@@ -211,7 +260,15 @@ async def run_council(
         return ""
 
     console.print(Panel(Markdown(judge_response), title="[bold green]Judge[/bold green]", border_style="green"))
-    judge_data = {"model": judge, "response": judge_response}
+    judge_data = {
+        "model": judge,
+        "response": judge_response,
+        "shuffle_traces": shuffle_traces_enabled,
+        "prune_cot": prune_cot_enabled,
+    }
+    if shuffle_seed is not None:
+        judge_data["shuffle_seed"] = shuffle_seed
+        judge_data["trace_order"] = trace_order
     if json_output:
         result["phases"]["judge"] = judge_data
         stream_event("judge", judge_data)

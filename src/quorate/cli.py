@@ -26,6 +26,8 @@ _tree.add_command("council", description="Full deliberation — blind phase, deb
     {"name": "question", "type": "string", "required": True},
     {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
     {"name": "--deep", "type": "boolean", "default": False, "description": "Force 2+ debate rounds"},
+    {"name": "--shuffle-traces", "type": "boolean", "default": False, "description": "Shuffle synthesis trace order before judge"},
+    {"name": "--prune-cot", "type": "boolean", "default": False, "description": "Prune hedge/self-questioning text before judge"},
     {"name": "--json", "type": "boolean", "default": False, "description": "Force JSON in TTY (auto in pipes)"},
 ], annotations={"readonly": True})
 _tree.add_command("quick", description="Parallel queries — all models answer independently", params=[
@@ -44,10 +46,14 @@ _tree.add_command("premortem", description="Assume failure, write past-tense nar
 _tree.add_command("oxford", description="Binary debate — structured FOR vs AGAINST", params=[
     {"name": "question", "type": "string", "required": True},
     {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
+    {"name": "--shuffle-traces", "type": "boolean", "default": False, "description": "Shuffle synthesis trace order before judge"},
+    {"name": "--prune-cot", "type": "boolean", "default": False, "description": "Prune hedge/self-questioning text before judge"},
 ], annotations={"readonly": True})
 _tree.add_command("discuss", description="Open roundtable — no judge, conversational", params=[
     {"name": "question", "type": "string", "required": True},
     {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
+    {"name": "--shuffle-traces", "type": "boolean", "default": False, "description": "Shuffle synthesis trace order before judge"},
+    {"name": "--prune-cot", "type": "boolean", "default": False, "description": "Prune hedge/self-questioning text before judge"},
 ], annotations={"readonly": True})
 
 
@@ -201,6 +207,8 @@ def council(
     context: tuple[str, ...] = (),
     deep: bool = False,
     fast: bool = False,
+    shuffle_traces: bool = False,
+    prune_cot: bool = False,
     json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
 ) -> None:
     """Full deliberation — blind phase, debate, judge synthesis, critique.
@@ -223,6 +231,8 @@ def council(
     result = asyncio.run(run_council(
         text, context=resolved_ctx, rounds=rounds,
         no_critic=fast,
+        shuffle_traces_enabled=shuffle_traces,
+        prune_cot_enabled=prune_cot,
         console=console, json_output=json_output,
     ))
     _emit_result("quorate council", result, json_output)
@@ -233,6 +243,8 @@ def _preset_cmd(name: str):
     def handler(
         question: str | None = None,
         context: str | None = None,
+        shuffle_traces: bool = False,
+        prune_cot: bool = False,
         json_output: bool = False,
         **_kwargs,
     ) -> None:
@@ -241,6 +253,8 @@ def _preset_cmd(name: str):
         full_context = f"{prefix}\n\n{context}" if context else prefix
         council(
             question=question, context=(full_context,),
+            shuffle_traces=shuffle_traces,
+            prune_cot=prune_cot,
             json_output=json_output,
         )
     return handler
@@ -257,12 +271,16 @@ for _name, _cfg in PRESETS.items():
         question: str | None = None,
         *,
         context: tuple[str, ...] = (),
+        shuffle_traces: bool = False,
+        prune_cot: bool = False,
         json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
         _preset_name: str = _name,
     ) -> None:
         resolved_ctx = _resolve_context(context)
         _preset_cmd(_preset_name)(
             question=question, context=resolved_ctx,
+            shuffle_traces=shuffle_traces,
+            prune_cot=prune_cot,
             json_output=json_output,
         )
     _cmd.__doc__ = _cfg["description"]
