@@ -63,10 +63,22 @@ app = cyclopts.App(
 # --- Shared parameter resolution ---
 
 
+def _safe_is_file(path: Path) -> bool:
+    """Path.is_file() that treats an over-long or invalid path name as not-a-file.
+
+    A question or context string longer than the OS filename limit raises
+    OSError from stat(); such input is inline text, not a path.
+    """
+    try:
+        return path.is_file()
+    except OSError:
+        return False
+
+
 def _resolve_question(question: str | None) -> str:
     if question:
         path = Path(question)
-        if path.is_file():
+        if _safe_is_file(path):
             return path.read_text().strip()
         return question
     # No question — emit command tree for agent discovery
@@ -84,7 +96,7 @@ def _resolve_context(context: tuple[str, ...]) -> str | None:
     parts = []
     for item in context:
         path = Path(item).expanduser()
-        if path.is_file():
+        if _safe_is_file(path):
             parts.append(path.read_text().strip())
         else:
             parts.append(item)
