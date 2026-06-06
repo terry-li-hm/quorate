@@ -146,3 +146,22 @@ class TestOutcome:
         d = rec.to_dict()
         assert d["outcome"] is None
         assert d["outcome_note"] is None
+
+
+    def test_prompt_outcome_tty_branch(self, monkeypatch):
+        # the capture path: interactive TTY + a real reply must parse through
+        import builtins
+        monkeypatch.setattr(runlog.sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(runlog.sys.stdout, "isatty", lambda: True)
+        monkeypatch.setattr(builtins, "input", lambda *a: "i changed my call")
+        assert runlog.prompt_outcome() == ("inverted", "changed my call")
+
+    def test_prompt_outcome_eof_mid_prompt_is_safe(self, monkeypatch):
+        # Ctrl-D / EOF at the prompt must not crash a finished council
+        import builtins
+        monkeypatch.setattr(runlog.sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(runlog.sys.stdout, "isatty", lambda: True)
+        def _eof(*a):
+            raise EOFError
+        monkeypatch.setattr(builtins, "input", _eof)
+        assert runlog.prompt_outcome() == (None, None)
