@@ -115,3 +115,34 @@ class TestFormatFooter:
         bad = _result(response="[Error: timeout]")
         lines, _ = runlog.format_footer([bad], total_duration_s=1.0)
         assert "FAIL" in lines[0]
+
+
+class TestOutcome:
+    def test_parse_matched_inverted_skip(self):
+        assert runlog._parse_outcome("m") == ("matched", None)
+        assert runlog._parse_outcome("i") == ("inverted", None)
+        assert runlog._parse_outcome("") == (None, None)
+        assert runlog._parse_outcome("s") == (None, None)
+
+    def test_parse_keeps_note(self):
+        assert runlog._parse_outcome("i flipped my call on precedent") == (
+            "inverted",
+            "flipped my call on precedent",
+        )
+        # case-insensitive head, note preserved
+        assert runlog._parse_outcome("M confirmed prior") == ("matched", "confirmed prior")
+
+    def test_record_serialises_outcome(self):
+        rec = runlog.build_record(
+            "council", [_result()], total_duration_s=1.0,
+            outcome="inverted", outcome_note="changed the decision",
+        )
+        d = rec.to_dict()
+        assert d["outcome"] == "inverted"
+        assert d["outcome_note"] == "changed the decision"
+
+    def test_default_outcome_is_null(self):
+        rec = runlog.build_record("quick", [_result()], total_duration_s=1.0)
+        d = rec.to_dict()
+        assert d["outcome"] is None
+        assert d["outcome_note"] is None

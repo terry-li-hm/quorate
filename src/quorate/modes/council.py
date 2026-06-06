@@ -241,11 +241,14 @@ async def run_council(
     if blind_failed:
         names = ", ".join(mcr.name for mcr in blind_failed)
         console.print(f"\n[bold red]⚠ Partial council: {len(blind_failed)}/{len(blind_results)} models failed ({names})[/bold red]")
+    outcome, outcome_note = runlog.prompt_outcome()
     record = runlog.build_record(
         mode="council",
         results=blind_results,
         total_duration_s=duration,
         judge_model=judge,
+        outcome=outcome,
+        outcome_note=outcome_note,
     )
     runlog.append(record)
     footer_lines, summary = runlog.format_footer(blind_results, duration)

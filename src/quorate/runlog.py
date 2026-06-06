@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -72,6 +73,8 @@ class RunRecord:
     total_tokens_in: int
     total_tokens_out: int
     est_cost_usd: float
+    outcome: str | None = None
+    outcome_note: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -83,6 +86,8 @@ class RunRecord:
             "total_tokens_in": self.total_tokens_in,
             "total_tokens_out": self.total_tokens_out,
             "est_cost_usd": round(self.est_cost_usd, 4),
+            "outcome": self.outcome,
+            "outcome_note": self.outcome_note,
         }
 
 
@@ -104,6 +109,8 @@ def build_record(
     judge_model: str | None = None,
     judge_result: ModelCallResult | None = None,
     extra_results: Iterable[ModelCallResult] | None = None,
+    outcome: str | None = None,
+    outcome_note: str | None = None,
 ) -> RunRecord:
     """Assemble a RunRecord. extra_results carries judge/critique cost into totals."""
     results_list = list(results)
@@ -125,7 +132,43 @@ def build_record(
         total_tokens_in=total_in,
         total_tokens_out=total_out,
         est_cost_usd=cost,
+        outcome=outcome,
+        outcome_note=outcome_note,
     )
+
+
+def _parse_outcome(line: str) -> tuple[str | None, str | None]:
+    """Parse a one-line outcome reply into (tag, note).
+
+    First token m/i selects matched/inverted; anything else (blank, s, ?) =>
+    untagged. Text after the first token is kept as a free-text note.
+    """
+    line = (line or "").strip()
+    if not line:
+        return None, None
+    head, _, rest = line.partition(" ")
+    tag = {"m": "matched", "i": "inverted"}.get(head[:1].lower())
+    return tag, (rest.strip() or None)
+
+
+def prompt_outcome() -> tuple[str | None, str | None]:
+    """Ask whether the verdict matched or inverted the going-in prior.
+
+    TTY-guarded and exception-safe: returns (None, None) for non-interactive
+    runs (dispatched/background/piped) so a council never blocks or crashes on
+    stdin. The one bit this captures — matched vs inverted — is what makes the
+    "is deliberation worth it?" question answerable from the run log.
+    """
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        return None, None
+    try:
+        reply = input(
+            "\nDid the verdict match or invert your going-in position? "
+            "[m]atched / [i]nverted / [Enter] skip (+ optional note)\n> "
+        )
+    except (EOFError, KeyboardInterrupt):
+        return None, None
+    return _parse_outcome(reply)
 
 
 def append(record: RunRecord, path: Path | None = None) -> Path:
