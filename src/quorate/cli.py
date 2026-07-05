@@ -308,7 +308,7 @@ for _name, _cfg in PRESETS.items():
         *,
         context: tuple[str, ...] = (),
         json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
-        _preset_name: str = _name,
+        _preset_name: Annotated[str, cyclopts.Parameter(parse=False)] = _name,
     ) -> None:
         resolved_ctx = _resolve_context(context)
         _preset_cmd(_preset_name)(
