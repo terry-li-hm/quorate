@@ -14,16 +14,20 @@ pip install quorate
 
 ## Models
 
-| Model | Provider |
-|-------|----------|
-| Gemini 3.1 Pro | Google AI Studio |
-| GPT-5.4 | OpenAI (Codex CLI) |
-| Claude Opus 4.6 | Anthropic (Claude CLI) |
-| Grok 4.20β | xAI |
-| DeepSeek V3.2 | OpenRouter |
-| GLM-5.1 | OpenRouter |
+The six council debaters (`resolved_council()` in `config.py`):
 
-Judge: Gemini 3.1 Pro. Critic: Claude Sonnet 4.6.
+| Model | Provider (native → fallback) |
+|-------|------------------------------|
+| GPT-5.5 | OpenAI Codex CLI → OpenAI API → OpenRouter |
+| Claude Opus 4.7 | Claude CLI → Anthropic API → OpenRouter |
+| Grok 4.3 | xAI API → OpenRouter |
+| Kimi K2.6 | OpenRouter (Moonshot) |
+| GLM-5.1 | ZhiPu API → OpenRouter |
+| MiMo v2.5 Pro | OpenRouter (Xiaomi) |
+
+Judge: Gemini 3.1 Pro (Gemini CLI → Google AI Studio → OpenRouter). Critic: Claude Opus 4.7.
+
+Any seat is overridable via `CONSILIUM_MODEL_M1`…`M6`, `CONSILIUM_MODEL_JUDGE`, and `CONSILIUM_MODEL_CRITIQUE`.
 
 ## Usage
 
@@ -55,13 +59,23 @@ quorate council /path/to/prompt.txt
 
 ### Council options
 
+Council takes five flags — everything else is injected through the question or `--context`:
+
 ```bash
-quorate council "question" --deep          # 2 debate rounds
-quorate council "question" --rounds 3      # custom rounds
-quorate council "question" --no-critic     # skip critique phase
-quorate council "question" --domain banking # regulatory context
-quorate council "question" --persona "startup founder with $2M runway"
+quorate council "question"                       # default: 1 debate round + critique (5-8 min)
+quorate council "question" --fast                # skip debate + critique (~2-3 min)
+quorate council "question" --deep                # 2 debate rounds (12-15 min)
+quorate council "question" --persona ./founder.md  # all models answer as this principal (file path)
+quorate council "question" --context banking-frame.md  # inject regulatory/domain context
+quorate council "question" --json                # force JSON envelope (auto when piped)
 ```
+
+`--persona` takes a **file path** to a stakeholder profile, not an inline description — every
+model then debates in that principal's first-person voice. `--context` is repeatable; each item
+is read as a file if it exists, else treated as inline text. There is no `--rounds`, `--no-critic`,
+or `--domain` flag: use `--fast`/`--deep` for round count, and put regulatory framing in the
+question or a `--context` file. The presets (`redteam`, `premortem`, `oxford`, `discuss`) accept
+only `--context` and `--json`; `--persona` is `council`/`quick` only.
 
 ## API Keys
 
@@ -70,12 +84,14 @@ quorate routes through native provider APIs first, falling back to OpenRouter:
 ```bash
 export GOOGLE_API_KEY="..."           # Gemini (Google AI Studio)
 export XAI_API_KEY="..."              # Grok (xAI)
+export ZHIPU_API_KEY="..."            # GLM (ZhiPu native)
 export ANTHROPIC_API_KEY="..."        # Claude (fallback if no claude CLI)
-export OPENROUTER_API_KEY="..."       # DeepSeek, GLM, fallback for all
+export OPENAI_API_KEY="..."           # GPT (fallback if no Codex CLI)
+export OPENROUTER_API_KEY="..."       # Kimi, MiMo, and fallback for all
 export QUORATE_OPENROUTER_KEY="..."   # Dedicated OpenRouter key (takes priority)
 ```
 
-GPT-5.4 uses [Codex CLI](https://github.com/openai/codex) (`codex exec`). Claude uses `claude --print`. Both route through their respective subscriptions at zero per-token cost.
+GPT-5.5 uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, and Gemini uses the Gemini CLI (`gemini -p`) — all route through their respective subscriptions at zero per-token cost, falling back to the direct API and then OpenRouter.
 
 ## How it works
 
