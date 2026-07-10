@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from quorate.cli import _resolve_context, _resolve_question
 
 
@@ -23,3 +25,37 @@ def test_resolve_question_reads_real_file(tmp_path: Path):
     f.write_text("  hello from file  \n")
     result = _resolve_question(str(f))
     assert result == "hello from file"
+
+
+def test_resolve_question_refuses_configured_protected_root(tmp_path: Path, monkeypatch):
+    protected = tmp_path / "protected"
+    protected.mkdir()
+    question = protected / "question.md"
+    question.write_text("confidential")
+    monkeypatch.setenv("QUORATE_PROTECTED_ROOTS", str(protected))
+
+    with pytest.raises(SystemExit):
+        _resolve_question(str(question))
+
+
+def test_resolve_context_refuses_symlink_into_protected_root(tmp_path: Path, monkeypatch):
+    protected = tmp_path / "protected"
+    protected.mkdir()
+    context = protected / "context.md"
+    context.write_text("confidential")
+    link = tmp_path / "apparently-safe.md"
+    link.symlink_to(context)
+    monkeypatch.setenv("QUORATE_PROTECTED_ROOTS", str(protected))
+
+    with pytest.raises(SystemExit):
+        _resolve_context((str(link),))
+
+
+def test_resolve_context_allows_file_outside_protected_root(tmp_path: Path, monkeypatch):
+    protected = tmp_path / "protected"
+    protected.mkdir()
+    context = tmp_path / "public-context.md"
+    context.write_text("public material")
+    monkeypatch.setenv("QUORATE_PROTECTED_ROOTS", str(protected))
+
+    assert _resolve_context((str(context),)) == "public material"

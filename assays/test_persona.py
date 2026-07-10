@@ -27,6 +27,16 @@ class TestResolvePersona:
         assert "Aster Vale" in result
         assert "decision traceability" in result
 
+    def test_protected_file_exits(self, tmp_path, monkeypatch):
+        protected = tmp_path / "protected"
+        protected.mkdir()
+        profile = protected / "reviewer.md"
+        profile.write_text("private profile")
+        monkeypatch.setenv("QUORATE_PROTECTED_ROOTS", str(protected))
+
+        with pytest.raises(SystemExit):
+            _resolve_persona(str(profile))
+
     def test_missing_file_exits(self, tmp_path):
         nonexistent = tmp_path / "does-not-exist.md"
         with pytest.raises(SystemExit):

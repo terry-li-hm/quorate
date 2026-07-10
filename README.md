@@ -77,6 +77,25 @@ or `--domain` flag: use `--fast`/`--deep` for round count, and put regulatory fr
 question or a `--context` file. The presets (`redteam`, `premortem`, `oxford`, `discuss`) accept
 only `--context` and `--json`; `--persona` is `council`/`quick` only.
 
+## Data boundary
+
+Quorate sends the question, context, and persona to multiple external model providers. Treat
+every input as an external disclosure. Do not submit credentials, personal data, confidential
+client material, private communications, or proprietary source text. Removing names alone is
+not sufficient sanitization. Persona files should be public, synthetic, or deliberately
+sanitized.
+
+Set `QUORATE_PROTECTED_ROOTS` to an OS-path-separator-delimited list of local directories that
+must never be read as Quorate inputs:
+
+```bash
+export QUORATE_PROTECTED_ROOTS="$HOME/private-client:$HOME/private-personal"
+```
+
+Question, context, and persona files beneath those roots are rejected, including symlinks that
+resolve into them. This is a guardrail for known directories; it cannot classify inline text or
+prove that a copied file has been safely sanitized.
+
 ## API Keys
 
 quorate routes through native provider APIs first, falling back to OpenRouter:

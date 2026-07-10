@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -27,11 +28,15 @@ _tree.add_command(
     description="Full deliberation — blind phase, debate, judge synthesis, critique",
     params=[
         {"name": "question", "type": "string", "required": True},
-        {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
+        {
+            "name": "--context",
+            "type": "string",
+            "description": "Non-sensitive context file(s) or text; repeatable",
+        },
         {
             "name": "--persona",
             "type": "string",
-            "description": "Stakeholder profile path — all models answer as this principal",
+            "description": "Public, synthetic, or sanitized persona file",
         },
         {
             "name": "--deep",
@@ -65,11 +70,15 @@ _tree.add_command(
     description="Parallel queries — all models answer independently",
     params=[
         {"name": "question", "type": "string", "required": True},
-        {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
+        {
+            "name": "--context",
+            "type": "string",
+            "description": "Non-sensitive context file(s) or text; repeatable",
+        },
         {
             "name": "--persona",
             "type": "string",
-            "description": "Stakeholder profile path — all models answer as this principal",
+            "description": "Public, synthetic, or sanitized persona file",
         },
         {"name": "--json", "type": "boolean", "default": False},
     ],
@@ -80,7 +89,11 @@ _tree.add_command(
     description="Adversarial stress-test — find what breaks",
     params=[
         {"name": "question", "type": "string", "required": True},
-        {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
+        {
+            "name": "--context",
+            "type": "string",
+            "description": "Non-sensitive context file(s) or text; repeatable",
+        },
     ],
     annotations={"readonly": True},
 )
@@ -89,7 +102,11 @@ _tree.add_command(
     description="Assume failure, write past-tense narratives",
     params=[
         {"name": "question", "type": "string", "required": True},
-        {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
+        {
+            "name": "--context",
+            "type": "string",
+            "description": "Non-sensitive context file(s) or text; repeatable",
+        },
     ],
     annotations={"readonly": True},
 )
@@ -98,7 +115,11 @@ _tree.add_command(
     description="Binary debate — structured FOR vs AGAINST",
     params=[
         {"name": "question", "type": "string", "required": True},
-        {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
+        {
+            "name": "--context",
+            "type": "string",
+            "description": "Non-sensitive context file(s) or text; repeatable",
+        },
         {
             "name": "--shuffle-traces",
             "type": "boolean",
@@ -119,7 +140,11 @@ _tree.add_command(
     description="Open roundtable — no judge, conversational",
     params=[
         {"name": "question", "type": "string", "required": True},
-        {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
+        {
+            "name": "--context",
+            "type": "string",
+            "description": "Non-sensitive context file(s) or text; repeatable",
+        },
         {
             "name": "--shuffle-traces",
             "type": "boolean",
@@ -139,12 +164,48 @@ _tree.add_command(
 
 app = cyclopts.App(
     name="quorate",
-    help="Multi-model deliberation CLI — frontier LLMs debate, then judge.",
+    help=(
+        "Multi-model deliberation CLI — frontier LLMs debate, then judge. "
+        "Inputs are sent to multiple external providers; use non-sensitive material only."
+    ),
     version=__version__,
 )
 
 
 # --- Shared parameter resolution ---
+
+PROTECTED_ROOTS_ENV = "QUORATE_PROTECTED_ROOTS"
+
+
+def _configured_protected_roots() -> tuple[Path, ...]:
+    """Return configured roots whose files must never leave the machine."""
+    roots: list[Path] = []
+    for raw_root in os.environ.get(PROTECTED_ROOTS_ENV, "").split(os.pathsep):
+        if not raw_root.strip():
+            continue
+        try:
+            roots.append(Path(raw_root).expanduser().resolve())
+        except (OSError, RuntimeError, ValueError) as exc:
+            Console().print(f"[red]Invalid {PROTECTED_ROOTS_ENV} entry:[/red] {raw_root} ({exc})")
+            raise SystemExit(1) from exc
+    return tuple(roots)
+
+
+def _refuse_protected_file(path: Path, input_kind: str) -> None:
+    """Fail closed when a file resolves inside a configured protected root."""
+    try:
+        resolved = path.resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        Console().print(f"[red]Could not safely resolve {input_kind} file:[/red] {path} ({exc})")
+        raise SystemExit(1) from exc
+
+    if any(resolved.is_relative_to(root) for root in _configured_protected_roots()):
+        Console().print(f"[red]Refusing protected {input_kind} file:[/red] {path}")
+        Console().print(
+            "[dim]Quorate sends inputs to multiple external model providers. "
+            "Use only a deliberately sanitized copy outside protected roots.[/dim]"
+        )
+        raise SystemExit(1)
 
 
 def _safe_is_file(path: Path) -> bool:
@@ -161,8 +222,9 @@ def _safe_is_file(path: Path) -> bool:
 
 def _resolve_question(question: str | None) -> str:
     if question:
-        path = Path(question)
+        path = Path(question).expanduser()
         if _safe_is_file(path):
+            _refuse_protected_file(path, "question")
             return path.read_text().strip()
         return question
     # No question — emit command tree for agent discovery
@@ -181,6 +243,7 @@ def _resolve_context(context: tuple[str, ...]) -> str | None:
     for item in context:
         path = Path(item).expanduser()
         if _safe_is_file(path):
+            _refuse_protected_file(path, "context")
             parts.append(path.read_text().strip())
         else:
             parts.append(item)
@@ -201,9 +264,10 @@ def _resolve_persona(persona: str | None) -> str | None:
     if not persona:
         return None
     path = Path(persona).expanduser()
-    if not path.is_file():
+    if not _safe_is_file(path):
         Console().print(f"[red]Persona file not found:[/red] {persona}")
         raise SystemExit(1)
+    _refuse_protected_file(path, "persona")
     return PERSONA_PREFIX + path.read_text().strip()
 
 
@@ -319,8 +383,8 @@ def quick(
 ) -> None:
     """Parallel queries — all models answer independently.
 
-    --persona <profile-path> makes every model answer as the named principal,
-    using the profile as system context. Combine with --context for paper review.
+    --persona <profile-path> makes every model answer as the named principal.
+    Persona and context must be public, synthetic, or deliberately sanitized.
     """
     json_output = json_output or _is_agent()
     from quorate.modes.quick import run_quick
@@ -356,8 +420,8 @@ def council(
     --fast skips debate + critique for ~2-3 min runtime; use for short inputs.
     --deep runs 2 debate rounds (12-15 min); use for substantive papers.
     Default: 1 debate round + critique (5-8 min).
-    --persona <profile-path> makes every model debate as the named principal —
-    the profile is loaded as system context, models speak in first person as them.
+    --persona <profile-path> makes every model debate as the named principal.
+    Persona and context must be public, synthetic, or deliberately sanitized.
     """
     json_output = json_output or _is_agent()
     from quorate.modes.council import run_council
