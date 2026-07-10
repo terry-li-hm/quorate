@@ -6,6 +6,7 @@ import re
 import time
 from typing import Any
 
+from porin import stream_event
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -21,13 +22,13 @@ from quorate.config import (
     resolved_critique,
     resolved_judge,
 )
-from porin import stream_event
+from quorate.heavyskill import prune_cot, shuffle_traces
 from quorate.prompts import (
     BLIND_SYSTEM,
     CHALLENGER_ADDITION,
     CRITIQUE_SYSTEM,
-    judge_system,
     debate_system,
+    judge_system,
 )
 
 CONFIDENCE_RE = re.compile(r"(?i)\*{0,2}Confidence\*{0,2}:?\s*(\d{1,2})\s*(?:/\s*10)")
@@ -36,12 +37,59 @@ CONFIDENCE_RE = re.compile(r"(?i)\*{0,2}Confidence\*{0,2}:?\s*(\d{1,2})\s*(?:/\s
 def _sanitize(content: str) -> str:
     """Sanitize speaker content to prevent prompt injection."""
     return (
-        content
-        .replace("SYSTEM:", "[SYSTEM]:")
+        content.replace("SYSTEM:", "[SYSTEM]:")
         .replace("INSTRUCTION:", "[INSTRUCTION]:")
         .replace("IGNORE PREVIOUS", "[IGNORE PREVIOUS]")
         .replace("OVERRIDE:", "[OVERRIDE]:")
     )
+
+
+def _build_synthesis_text(
+    blind_claims: dict[str, str],
+    conversation: list[tuple[str, str]],
+    *,
+    shuffle_enabled: bool,
+    prune_enabled: bool,
+) -> tuple[str, list[str], int | None]:
+    if not shuffle_enabled and not prune_enabled:
+        all_text = "\n\n".join(
+            f"**{name}** (blind claim): {claim}" for name, claim in blind_claims.items()
+        )
+        if conversation:
+            debate_text = "\n\n".join(f"**{name}**: {text}" for name, text in conversation)
+            all_text += f"\n\n--- DEBATE ---\n\n{debate_text}"
+        return all_text, [], None
+
+    traces: list[dict[str, str]] = []
+    # HeavySkill (Wang et al., ICML 2026, arXiv:2605.02396)
+    for name, claim in blind_claims.items():
+        traces.append(
+            {
+                "speaker": name,
+                "label": "blind claim",
+                "content": prune_cot(claim) if prune_enabled else claim,
+            }
+        )
+    for name, text in conversation:
+        traces.append(
+            {
+                "speaker": name,
+                "label": "debate",
+                "content": prune_cot(text) if prune_enabled else text,
+            }
+        )
+
+    shuffle_seed: int | None = None
+    if shuffle_enabled:
+        # HeavySkill (Wang et al., ICML 2026, arXiv:2605.02396)
+        shuffle_seed = time.time_ns()
+        traces = shuffle_traces(traces, seed=shuffle_seed)
+
+    rendered = "\n\n".join(
+        f"**{trace['speaker']}** ({trace['label']}): {trace['content']}" for trace in traces
+    )
+    order = [f"{trace['speaker']} [{trace['label']}]" for trace in traces]
+    return rendered, order, shuffle_seed
 
 
 async def run_council(
@@ -54,6 +102,8 @@ async def run_council(
     judge_model: str | None = None,
     critic_model: str | None = None,
     no_critic: bool = False,
+    shuffle_traces_enabled: bool = False,
+    prune_cot_enabled: bool = False,
     console: Console | None = None,
     json_output: bool = False,
 ) -> str | dict[str, Any]:
@@ -62,6 +112,7 @@ async def run_council(
     Returns judge_response (str) normally, or structured dict when json_output=True.
     """
     import sys
+
     if json_output:
         console = console or Console(file=sys.stderr)
     else:
@@ -90,9 +141,9 @@ async def run_council(
         if not mcr.is_error:
             blind_claims[mcr.name] = mcr.response
             blind_json.append(mcr.to_dict())
-            console.print(Panel(
-                Markdown(mcr.response), title=f"[bold]{mcr.name}[/bold]", border_style="dim"
-            ))
+            console.print(
+                Panel(Markdown(mcr.response), title=f"[bold]{mcr.name}[/bold]", border_style="dim")
+            )
         else:
             blind_json.append(mcr.to_dict())
             console.print(f"[red]{mcr.name}: {mcr.response}[/red]")
@@ -102,7 +153,10 @@ async def run_council(
     blind_failed = [mcr for mcr in blind_results if mcr.is_error]
     if blind_failed:
         names = ", ".join(mcr.name for mcr in blind_failed)
-        console.print(f"\n[bold red]⚠ {len(blind_failed)}/{len(blind_results)} models failed: {names}[/bold red]")
+        console.print(
+            f"\n[bold red]⚠ {len(blind_failed)}/{len(blind_results)} models failed: {names}[/bold"
+            " red]"
+        )
 
     if json_output:
         result["phases"]["blind"] = blind_json
@@ -126,10 +180,7 @@ async def run_council(
         challenger_idx = (round_num - 1) % len(models)
 
         # Build debate context from prior conversation (blind_summary set above)
-        conv_summary = "\n\n".join(
-            f"**{name}**: {_sanitize(text)}"
-            for name, text in conversation
-        )
+        conv_summary = "\n\n".join(f"**{name}**: {_sanitize(text)}" for name, text in conversation)
 
         previous_speakers = ""
         for idx, entry in enumerate(models):
@@ -151,9 +202,10 @@ async def run_council(
             ]
 
             # Query this speaker sequentially (debate is sequential)
+            import httpx
+
             from quorate.api import query_model
             from quorate.config import api_keys
-            import httpx
 
             keys = api_keys()
             async with httpx.AsyncClient() as client:
@@ -169,9 +221,13 @@ async def run_council(
                 conversation.append((mcr.name, mcr.response))
                 debate_json.append(entry_dict)
                 role = " [yellow](challenger)[/yellow]" if is_challenger else ""
-                console.print(Panel(
-                    Markdown(mcr.response), title=f"[bold]{mcr.name}[/bold]{role}", border_style="dim"
-                ))
+                console.print(
+                    Panel(
+                        Markdown(mcr.response),
+                        title=f"[bold]{mcr.name}[/bold]{role}",
+                        border_style="dim",
+                    )
+                )
                 previous_speakers = (
                     f"{previous_speakers}, {mcr.name}" if previous_speakers else mcr.name
                 )
@@ -186,12 +242,17 @@ async def run_council(
 
     # --- JUDGE ---
     console.print("\n[bold cyan]JUDGE SYNTHESIS[/bold cyan]")
-    all_text = blind_summary
-    if conversation:
-        debate_text = "\n\n".join(
-            f"**{name}**: {text}" for name, text in conversation
+    all_text, trace_order, shuffle_seed = _build_synthesis_text(
+        blind_claims,
+        conversation,
+        shuffle_enabled=shuffle_traces_enabled,
+        prune_enabled=prune_cot_enabled,
+    )
+    if shuffle_traces_enabled and trace_order:
+        console.print(
+            f"[dim]Shuffled synthesis trace order (seed={shuffle_seed}):"
+            f" {' -> '.join(trace_order)}[/dim]"
         )
-        all_text += f"\n\n--- DEBATE ---\n\n{debate_text}"
 
     failed_names = [mcr.name for mcr in blind_failed] if blind_failed else None
     judge_prompt = judge_system(len(models), failed_names)
@@ -210,8 +271,20 @@ async def run_council(
             return result
         return ""
 
-    console.print(Panel(Markdown(judge_response), title="[bold green]Judge[/bold green]", border_style="green"))
-    judge_data = {"model": judge, "response": judge_response}
+    console.print(
+        Panel(
+            Markdown(judge_response), title="[bold green]Judge[/bold green]", border_style="green"
+        )
+    )
+    judge_data = {
+        "model": judge,
+        "response": judge_response,
+        "shuffle_traces": shuffle_traces_enabled,
+        "prune_cot": prune_cot_enabled,
+    }
+    if shuffle_seed is not None:
+        judge_data["shuffle_seed"] = shuffle_seed
+        judge_data["trace_order"] = trace_order
     if json_output:
         result["phases"]["judge"] = judge_data
         stream_event("judge", judge_data)
@@ -227,11 +300,13 @@ async def run_council(
             critique, critique_messages, max_tokens=4096, timeout=120
         )
         if not is_error(critique_response):
-            console.print(Panel(
-                Markdown(critique_response),
-                title="[bold yellow]Critique[/bold yellow]",
-                border_style="yellow",
-            ))
+            console.print(
+                Panel(
+                    Markdown(critique_response),
+                    title="[bold yellow]Critique[/bold yellow]",
+                    border_style="yellow",
+                )
+            )
             critique_data = {"model": str(critique), "response": critique_response}
             if json_output:
                 result["phases"]["critique"] = critique_data
@@ -240,7 +315,10 @@ async def run_council(
     duration = time.monotonic() - start
     if blind_failed:
         names = ", ".join(mcr.name for mcr in blind_failed)
-        console.print(f"\n[bold red]⚠ Partial council: {len(blind_failed)}/{len(blind_results)} models failed ({names})[/bold red]")
+        console.print(
+            f"\n[bold red]⚠ Partial council: {len(blind_failed)}/{len(blind_results)} models failed"
+            f" ({names})[/bold red]"
+        )
     outcome, outcome_note = runlog.prompt_outcome()
     record = runlog.build_record(
         mode="council",

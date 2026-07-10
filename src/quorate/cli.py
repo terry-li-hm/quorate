@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Annotated
 
 import cyclopts
-from porin import CommandTree, EXIT_ERROR, action, emit_err, emit_ok
+from porin import EXIT_ERROR, CommandTree, action, emit_err, emit_ok
 from rich.console import Console
 
 from quorate import __version__
@@ -22,35 +22,119 @@ def _is_agent() -> bool:
 # --- Command tree (bare invocation → agent self-discovery) ---
 
 _tree = CommandTree("quorate")
-_tree.add_command("council", description="Full deliberation — blind phase, debate, judge synthesis, critique", params=[
-    {"name": "question", "type": "string", "required": True},
-    {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
-    {"name": "--persona", "type": "string", "description": "Stakeholder profile path — all models answer as this principal"},
-    {"name": "--deep", "type": "boolean", "default": False, "description": "Force 2+ debate rounds"},
-    {"name": "--json", "type": "boolean", "default": False, "description": "Force JSON in TTY (auto in pipes)"},
-], annotations={"readonly": True})
-_tree.add_command("quick", description="Parallel queries — all models answer independently", params=[
-    {"name": "question", "type": "string", "required": True},
-    {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
-    {"name": "--persona", "type": "string", "description": "Stakeholder profile path — all models answer as this principal"},
-    {"name": "--json", "type": "boolean", "default": False},
-], annotations={"readonly": True})
-_tree.add_command("redteam", description="Adversarial stress-test — find what breaks", params=[
-    {"name": "question", "type": "string", "required": True},
-    {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
-], annotations={"readonly": True})
-_tree.add_command("premortem", description="Assume failure, write past-tense narratives", params=[
-    {"name": "question", "type": "string", "required": True},
-    {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
-], annotations={"readonly": True})
-_tree.add_command("oxford", description="Binary debate — structured FOR vs AGAINST", params=[
-    {"name": "question", "type": "string", "required": True},
-    {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
-], annotations={"readonly": True})
-_tree.add_command("discuss", description="Open roundtable — no judge, conversational", params=[
-    {"name": "question", "type": "string", "required": True},
-    {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
-], annotations={"readonly": True})
+_tree.add_command(
+    "council",
+    description="Full deliberation — blind phase, debate, judge synthesis, critique",
+    params=[
+        {"name": "question", "type": "string", "required": True},
+        {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
+        {
+            "name": "--persona",
+            "type": "string",
+            "description": "Stakeholder profile path — all models answer as this principal",
+        },
+        {
+            "name": "--deep",
+            "type": "boolean",
+            "default": False,
+            "description": "Force 2+ debate rounds",
+        },
+        {
+            "name": "--shuffle-traces",
+            "type": "boolean",
+            "default": False,
+            "description": "Shuffle synthesis trace order before judge",
+        },
+        {
+            "name": "--prune-cot",
+            "type": "boolean",
+            "default": False,
+            "description": "Prune hedge/self-questioning text before judge",
+        },
+        {
+            "name": "--json",
+            "type": "boolean",
+            "default": False,
+            "description": "Force JSON in TTY (auto in pipes)",
+        },
+    ],
+    annotations={"readonly": True},
+)
+_tree.add_command(
+    "quick",
+    description="Parallel queries — all models answer independently",
+    params=[
+        {"name": "question", "type": "string", "required": True},
+        {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
+        {
+            "name": "--persona",
+            "type": "string",
+            "description": "Stakeholder profile path — all models answer as this principal",
+        },
+        {"name": "--json", "type": "boolean", "default": False},
+    ],
+    annotations={"readonly": True},
+)
+_tree.add_command(
+    "redteam",
+    description="Adversarial stress-test — find what breaks",
+    params=[
+        {"name": "question", "type": "string", "required": True},
+        {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
+    ],
+    annotations={"readonly": True},
+)
+_tree.add_command(
+    "premortem",
+    description="Assume failure, write past-tense narratives",
+    params=[
+        {"name": "question", "type": "string", "required": True},
+        {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
+    ],
+    annotations={"readonly": True},
+)
+_tree.add_command(
+    "oxford",
+    description="Binary debate — structured FOR vs AGAINST",
+    params=[
+        {"name": "question", "type": "string", "required": True},
+        {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
+        {
+            "name": "--shuffle-traces",
+            "type": "boolean",
+            "default": False,
+            "description": "Shuffle synthesis trace order before judge",
+        },
+        {
+            "name": "--prune-cot",
+            "type": "boolean",
+            "default": False,
+            "description": "Prune hedge/self-questioning text before judge",
+        },
+    ],
+    annotations={"readonly": True},
+)
+_tree.add_command(
+    "discuss",
+    description="Open roundtable — no judge, conversational",
+    params=[
+        {"name": "question", "type": "string", "required": True},
+        {"name": "--context", "type": "string", "description": "Context file(s), repeatable"},
+        {
+            "name": "--shuffle-traces",
+            "type": "boolean",
+            "default": False,
+            "description": "Shuffle synthesis trace order before judge",
+        },
+        {
+            "name": "--prune-cot",
+            "type": "boolean",
+            "default": False,
+            "description": "Prune hedge/self-questioning text before judge",
+        },
+    ],
+    annotations={"readonly": True},
+)
 
 
 app = cyclopts.App(
@@ -104,12 +188,11 @@ def _resolve_context(context: tuple[str, ...]) -> str | None:
 
 
 PERSONA_PREFIX = (
-    "PERSONA INSTRUCTION: You are reviewing as the principal whose stakeholder profile follows. "
-    "Adopt this principal's voice, posture, attention budget, decision-thresholds, and what they "
-    "read for. Speak in the first person. Respond as they would respond, not as a generic reviewer. "
-    "Cite the profile fields you are leaning on (e.g. 'profile §Voice — joint threshold development'). "
-    "Do not break character.\n\n"
-    "STAKEHOLDER PROFILE:\n"
+    "PERSONA INSTRUCTION: You are reviewing as the principal whose stakeholder profile follows."
+    " Adopt this principal's voice, posture, attention budget, decision-thresholds, and what they"
+    " read for. Speak in the first person. Respond as they would respond, not as a generic"
+    " reviewer. Cite the profile fields you are leaning on (e.g. 'profile §Voice — joint threshold"
+    " development'). Do not break character.\n\nSTAKEHOLDER PROFILE:\n"
 )
 
 
@@ -136,13 +219,21 @@ def _emit_result(command: str, result: str | dict | None, json_output: bool) -> 
     if not json_output:
         return
     if not result:
-        emit_err(command, "No result produced", EXIT_ERROR,
-                 fix="Check model availability with: quorate quick 'test'")
+        emit_err(
+            command,
+            "No result produced",
+            EXIT_ERROR,
+            fix="Check model availability with: quorate quick 'test'",
+        )
         return
     data = result if isinstance(result, dict) else {"response": result}
-    emit_ok(command, data, [
-        action("quorate redteam --context <file>", "Stress-test the synthesis"),
-    ])
+    emit_ok(
+        command,
+        data,
+        [
+            action("quorate redteam --context <file>", "Stress-test the synthesis"),
+        ],
+    )
 
 
 # --- Presets: named council configurations ---
@@ -212,7 +303,9 @@ def auto(
     if not json_output:
         Console().print(f"[dim]→ {mode}[/dim]\n")
     ctx_tuple = (resolved_ctx,) if resolved_ctx else ()
-    handler = {"quick": quick, "council": council, "redteam": _preset_cmd("redteam")}.get(mode, council)
+    handler = {"quick": quick, "council": council, "redteam": _preset_cmd("redteam")}.get(
+        mode, council
+    )
     handler(question=text, context=ctx_tuple, deep=deep, json_output=json_output)
 
 
@@ -231,13 +324,18 @@ def quick(
     """
     json_output = json_output or _is_agent()
     from quorate.modes.quick import run_quick
+
     text = _resolve_question(question)
     resolved_ctx = _merge_persona_context(_resolve_persona(persona), _resolve_context(context))
     console = Console(quiet=json_output)
-    result = asyncio.run(run_quick(
-        text, context=resolved_ctx, console=console,
-        json_output=json_output,
-    ))
+    result = asyncio.run(
+        run_quick(
+            text,
+            context=resolved_ctx,
+            console=console,
+            json_output=json_output,
+        )
+    )
     _emit_result("quorate quick", result, json_output)
 
 
@@ -249,6 +347,8 @@ def council(
     persona: str | None = None,
     deep: bool = False,
     fast: bool = False,
+    shuffle_traces: bool = False,
+    prune_cot: bool = False,
     json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
 ) -> None:
     """Full deliberation — blind phase, debate, judge synthesis, critique.
@@ -261,6 +361,7 @@ def council(
     """
     json_output = json_output or _is_agent()
     from quorate.modes.council import run_council
+
     text = _resolve_question(question)
     resolved_ctx = _merge_persona_context(_resolve_persona(persona), _resolve_context(context))
     if fast:
@@ -270,19 +371,29 @@ def council(
     else:
         rounds = 1
     console = Console(quiet=json_output)
-    result = asyncio.run(run_council(
-        text, context=resolved_ctx, rounds=rounds,
-        no_critic=fast,
-        console=console, json_output=json_output,
-    ))
+    result = asyncio.run(
+        run_council(
+            text,
+            context=resolved_ctx,
+            rounds=rounds,
+            no_critic=fast,
+            shuffle_traces_enabled=shuffle_traces,
+            prune_cot_enabled=prune_cot,
+            console=console,
+            json_output=json_output,
+        )
+    )
     _emit_result("quorate council", result, json_output)
 
 
 def _preset_cmd(name: str):
     """Create a handler function for a preset."""
+
     def handler(
         question: str | None = None,
         context: str | None = None,
+        shuffle_traces: bool = False,
+        prune_cot: bool = False,
         json_output: bool = False,
         **_kwargs,
     ) -> None:
@@ -290,9 +401,13 @@ def _preset_cmd(name: str):
         prefix = preset["context_prefix"]
         full_context = f"{prefix}\n\n{context}" if context else prefix
         council(
-            question=question, context=(full_context,),
+            question=question,
+            context=(full_context,),
+            shuffle_traces=shuffle_traces,
+            prune_cot=prune_cot,
             json_output=json_output,
         )
+
     return handler
 
 
@@ -307,14 +422,20 @@ for _name, _cfg in PRESETS.items():
         question: str | None = None,
         *,
         context: tuple[str, ...] = (),
+        shuffle_traces: bool = False,
+        prune_cot: bool = False,
         json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
         _preset_name: Annotated[str, cyclopts.Parameter(parse=False)] = _name,
     ) -> None:
         resolved_ctx = _resolve_context(context)
         _preset_cmd(_preset_name)(
-            question=question, context=resolved_ctx,
+            question=question,
+            context=resolved_ctx,
+            shuffle_traces=shuffle_traces,
+            prune_cot=prune_cot,
             json_output=json_output,
         )
+
     _cmd.__doc__ = _cfg["description"]
 
 

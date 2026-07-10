@@ -13,8 +13,12 @@ Both treatments are additive (default-off CLI flags --shuffle-traces and
 --prune-cot). Implementation lives in src/quorate/heavyskill.py.
 """
 
-from quorate.heavyskill import prune_cot, shuffle_traces
+import sys
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from quorate.heavyskill import prune_cot, shuffle_traces
 
 SAMPLE_TRACES = [
     {"model": "claude", "answer": "A", "reasoning": "Because X."},
