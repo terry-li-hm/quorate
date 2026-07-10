@@ -4,8 +4,8 @@ import pytest
 
 from quorate.cli import (
     PERSONA_PREFIX,
-    _resolve_persona,
     _merge_persona_context,
+    _resolve_persona,
 )
 
 
@@ -17,13 +17,15 @@ class TestResolvePersona:
         assert _resolve_persona("") is None
 
     def test_file_loaded_with_prefix(self, tmp_path):
-        profile = tmp_path / "doug.md"
-        profile.write_text("Doug Robertson — Group Head of Responsible AI.\nReads for regulator-defensibility.")
+        profile = tmp_path / "synthetic-reviewer.md"
+        profile.write_text(
+            "Aster Vale — synthetic assurance reviewer.\nReads for decision traceability."
+        )
         result = _resolve_persona(str(profile))
         assert result is not None
         assert result.startswith(PERSONA_PREFIX)
-        assert "Doug Robertson" in result
-        assert "regulator-defensibility" in result
+        assert "Aster Vale" in result
+        assert "decision traceability" in result
 
     def test_missing_file_exits(self, tmp_path):
         nonexistent = tmp_path / "does-not-exist.md"
