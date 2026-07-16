@@ -86,6 +86,26 @@ _tree.add_command(
     annotations={"readonly": True},
 )
 _tree.add_command(
+    "benchmark",
+    description="Run fixed synthetic roster canaries and save a dated health snapshot",
+    params=[
+        {
+            "name": "--timeout",
+            "type": "number",
+            "default": 90,
+            "description": "Per-route timeout in seconds",
+        },
+        {
+            "name": "--no-save",
+            "type": "boolean",
+            "default": False,
+            "description": "Do not write the dated local snapshot",
+        },
+        {"name": "--json", "type": "boolean", "default": False},
+    ],
+    annotations={"readonly": True},
+)
+_tree.add_command(
     "redteam",
     description="Adversarial stress-test — find what breaks",
     params=[
@@ -414,6 +434,41 @@ def quick(
         )
     )
     _emit_result("quorate quick", result, json_output)
+
+
+@app.command
+def benchmark(
+    *,
+    timeout: float = 90,
+    save: bool = True,
+    json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
+) -> None:
+    """Run fixed synthetic canaries across the current roster.
+
+    Responses are never persisted. The dated snapshot contains only route,
+    latency, deterministic pass state, and safe diagnostics.
+    """
+    json_output = json_output or _is_agent()
+    from quorate.benchmark import run_benchmark
+
+    console = Console(quiet=json_output)
+    report = asyncio.run(run_benchmark(timeout=timeout, save=save))
+    if not json_output:
+        status_style = {
+            "healthy": "green",
+            "degraded": "yellow",
+            "unhealthy": "red",
+        }[report["status"]]
+        console.print(f"[{status_style}]Roster status: {report['status']}[/{status_style}]")
+        for model in report["models"]:
+            console.print(
+                f"  {model['name']}: {model['passed']}/{model['canaries']} passed, "
+                f"{model['mean_latency_s']:.2f}s mean"
+            )
+        console.print(f"\n{report['recommended_action']}")
+        if report.get("snapshot_path"):
+            console.print(f"[dim]Snapshot: {report['snapshot_path']}[/dim]")
+    _emit_result("quorate benchmark", report, json_output)
 
 
 @app.command

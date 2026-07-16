@@ -1,6 +1,6 @@
 [project]
 name = "quorate"
-version = "0.2.0"
+version = "0.3.0"
 description = "Multi-model deliberation CLI — frontier LLMs debate, then judge"
 license = "MIT"
 readme = "README.md"

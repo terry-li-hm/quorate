@@ -57,6 +57,9 @@ quorate oxford "AI will replace most knowledge work within 5 years"
 # Open roundtable, no judge
 quorate discuss "The future of open source"
 
+# Synthetic roster health check; saves a dated local snapshot
+quorate benchmark
+
 # Auto-classify (no subcommand)
 quorate "What's the best database for time-series data?"
 
@@ -120,6 +123,25 @@ export QUORATE_OPENROUTER_KEY="..."   # Dedicated OpenRouter key (takes priority
 GPT-5.6 Sol uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, and Gemini uses the Gemini CLI (`gemini -p`) — all route through their respective subscriptions at zero marginal cost, falling back to the direct API and then OpenRouter. Telemetry records the model and route actually used, and subscription-backed calls are not priced as API usage.
 
 Scripted runs require a strict majority of configured seats. Quick mode therefore needs four of seven successful responses, while council needs four of six in its blind phase. A degraded run returns a non-zero JSON error envelope containing the partial responses and safe route diagnostics such as `http_404`, `timeout`, or `no_credentials`; provider prose and secrets are never copied into diagnostics.
+
+## Roster review policy
+
+`quorate benchmark` runs three fixed synthetic canaries for route availability,
+strict structured output, and simple deterministic reasoning. It stores no response
+text. Dated snapshots under `~/.local/state/quorate/benchmarks/` contain only the
+route used, latency, pass state, and safe diagnostics.
+
+Treat Artificial Analysis as the broad screening layer for intelligence, cost,
+speed, and provider performance. Cross-check material changes against a task-specific
+source such as Epoch AI, Arena, or SWE-bench, then require agreement with the local
+canaries before changing a seat. One failed seat is tolerated when every canary still
+has a strict-majority quorum. Quorate never edits its own roster from benchmark output.
+
+On the Vivesca host, `scripts/monthly-benchmark.sh` is the non-interactive runner.
+It loads the locally resolved credential environment, uses subscription routes first,
+and stays silent when the roster is healthy. The corresponding LaunchAgent runs at
+09:00 on the first day of each month and writes only degraded or failed output to
+`~/logs/quorate-monthly-benchmark.log`.
 
 ## How it works
 
