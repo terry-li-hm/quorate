@@ -32,7 +32,7 @@ The six council debaters (`resolved_council()` in `config.py`):
 | GLM-5.2 | ZhiPu API → OpenRouter |
 | MiMo v2.5 Pro | OpenRouter (Xiaomi) |
 
-Judge: Gemini 3.1 Pro (Gemini CLI → Google AI Studio → OpenRouter), with GPT-5.6 Sol through the Codex subscription as the cross-vendor fallback. Critic: Claude Opus 4.8.
+Judge: Gemini 3.5 Flash (Gemini CLI → Google AI Studio → OpenRouter), with GPT-5.6 Sol through the Codex subscription as the cross-vendor fallback. Critic: Claude Opus 4.8.
 
 Any seat is overridable via `CONSILIUM_MODEL_M1`…`M6`, `CONSILIUM_MODEL_JUDGE`, and `CONSILIUM_MODEL_CRITIQUE`.
 

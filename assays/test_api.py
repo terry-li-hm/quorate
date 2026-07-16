@@ -26,7 +26,7 @@ class TestDetectProvider:
         assert _detect_provider("claude-sonnet-4-6") == "anthropic"
 
     def test_google(self):
-        assert _detect_provider("google/gemini-3.1-pro-preview") == "google"
+        assert _detect_provider("google/gemini-3.5-flash") == "google"
 
     def test_xai(self):
         assert _detect_provider("x-ai/grok-4") == "xai"

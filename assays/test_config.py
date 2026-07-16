@@ -25,16 +25,16 @@ class TestDisplayName:
     def test_deepseek(self):
         assert _display_name("deepseek/deepseek-v3.2") == "DeepSeek-V3.2"
 
-    def test_gemini_strips_preview(self):
-        assert _display_name("google/gemini-3.1-pro-preview") == "Gemini-3.1-Pro"
+    def test_gemini_stable(self):
+        assert _display_name("google/gemini-3.5-flash") == "Gemini-3.5-Flash"
 
     def test_grok(self):
         assert _display_name("x-ai/grok-4") == "Grok-4"
 
 
 class TestIsThinkingModel:
-    def test_gemini_pro(self):
-        assert is_thinking_model("google/gemini-3.1-pro-preview") is True
+    def test_gemini_flash(self):
+        assert is_thinking_model("google/gemini-3.5-flash") is True
 
     def test_gpt_54(self):
         assert is_thinking_model("openai/gpt-5.4-pro") is True
@@ -111,7 +111,11 @@ class TestCouncilResolution:
         assert len(quick_models()) == 7
 
     def test_judge_default(self):
-        assert "gemini" in resolved_judge().lower()
+        assert resolved_judge() == "google/gemini-3.5-flash"
+
+    def test_gemini_alias_uses_stable_judge(self, monkeypatch):
+        monkeypatch.setenv("CONSILIUM_MODEL_JUDGE", "gemini")
+        assert resolved_judge() == "google/gemini-3.5-flash"
 
     def test_critique_default(self):
         assert resolved_critique() == "anthropic/claude-opus-4-8"

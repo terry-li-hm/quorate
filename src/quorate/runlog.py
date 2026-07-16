@@ -20,6 +20,7 @@ def _default_log_path() -> Path:
 
 PRICES: dict[str, tuple[float, float]] = {
     "gemini-3.1-pro-preview": (2.00, 12.00),
+    "gemini-3.5-flash": (1.50, 9.00),
     "gpt-5.6-sol": (5.00, 30.00),
     "gpt-5.5": (2.50, 10.00),
     "claude-fable-5": (10.00, 50.00),

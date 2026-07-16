@@ -35,7 +35,7 @@ scripts/install-local.sh
 
 | Model | Provider | Display Name |
 |-------|----------|-------------|
-| google/gemini-3.1-pro-preview | gemini -p / Google AI Studio | Gemini-3.1-Pro |
+| google/gemini-3.5-flash | gemini -p / Google AI Studio | Gemini-3.5-Flash |
 | openai/gpt-5.6-sol | Codex exec | GPT-5.6-Sol |
 | anthropic/claude-fable-5 | claude --print | Claude-Fable-5 |
 | x-ai/grok-4.5 | xAI native | Grok-4.5 |
@@ -43,7 +43,7 @@ scripts/install-local.sh
 | z-ai/glm-5.2 | ZhiPu native | GLM-5.2 |
 | xiaomi/mimo-v2.5-pro | OpenRouter | MiMo-V2.5-Pro |
 
-Judge: Gemini 3.1 Pro, with GPT-5.6 Sol through Codex as the fallback when all Gemini routes fail. Critic: Claude Opus 4.8.
+Judge: Gemini 3.5 Flash, with GPT-5.6 Sol through Codex as the fallback when all Gemini routes fail. Critic: Claude Opus 4.8.
 
 ## Runtime expectations
 

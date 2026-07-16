@@ -70,7 +70,7 @@ ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 
 # Default models
-JUDGE_MODEL = "google/gemini-3.1-pro-preview"
+JUDGE_MODEL = "google/gemini-3.5-flash"
 JUDGE_FALLBACK_MODEL = "openai/gpt-5.6-sol"
 CRITIQUE_MODEL = "anthropic/claude-opus-4-8"
 CLASSIFIER_MODEL = "anthropic/claude-opus-4-8"
@@ -91,7 +91,7 @@ def _normalize_model(value: str) -> str:
         case "fable":
             return "anthropic/claude-fable-5"
         case "gemini":
-            return "google/gemini-3.1-pro-preview"
+            return "google/gemini-3.5-flash"
         case _:
             return value.strip()
 
@@ -185,6 +185,7 @@ THINKING_MODELS = {
     "gpt-5.4-pro",
     "gpt-5.4",
     "gemini-3.1-pro-preview",
+    "gemini-3.5-flash",
     "grok-4",
     "grok-4.5",
     "grok-4.3",
