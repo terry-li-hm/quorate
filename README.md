@@ -138,6 +138,10 @@ source such as Epoch AI, Arena, or SWE-bench, then require agreement with the lo
 canaries before changing a seat. One failed seat is tolerated when every canary still
 has a strict-majority quorum. Quorate never edits its own roster from benchmark output.
 
+Material role changes also receive a durable experiment note. See the
+[2026-07-16 judge role selection](docs/experiments/2026-07-16-judge-role-selection.md)
+for the evidence behind the Fable judge architecture.
+
 On the Vivesca host, `scripts/monthly-benchmark.sh` is the non-interactive runner.
 It loads the locally resolved credential environment, uses subscription routes first,
 and stays silent when the roster is healthy. The corresponding LaunchAgent runs at
