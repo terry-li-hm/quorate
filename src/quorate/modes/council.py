@@ -12,7 +12,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 
 from quorate import runlog
-from quorate.api import query_judge, run_parallel
+from quorate.api import query_judge, quorum_health, run_parallel
 from quorate.config import (
     Message,
     ModelEntry,
@@ -21,6 +21,7 @@ from quorate.config import (
     resolved_council,
     resolved_critique,
     resolved_judge,
+    resolved_judge_fallback,
 )
 from quorate.heavyskill import prune_cot, shuffle_traces
 from quorate.prompts import (
@@ -119,6 +120,7 @@ async def run_council(
         console = console or Console()
     models = models or resolved_council()
     judge = resolved_judge(judge_model)
+    judge_fallback = resolved_judge_fallback()
     critique = resolved_critique(critic_model)
 
     full_question = f"{context}\n\n{question}" if context else question
@@ -151,6 +153,7 @@ async def run_council(
             stream_event("blind", mcr.to_dict())
 
     blind_failed = [mcr for mcr in blind_results if mcr.is_error]
+    success_count, quorum_target, quorum_achieved = quorum_health(blind_results)
     if blind_failed:
         names = ", ".join(mcr.name for mcr in blind_failed)
         console.print(
@@ -160,12 +163,19 @@ async def run_council(
 
     if json_output:
         result["phases"]["blind"] = blind_json
+        result["success_count"] = success_count
         result["failed_count"] = len(blind_failed)
+        result["quorum_target"] = quorum_target
+        result["quorum_achieved"] = quorum_achieved
 
-    if len(blind_claims) < 2:
-        console.print("[red]Too few models responded in blind phase.[/red]")
+    if not quorum_achieved:
+        message = (
+            f"No quorum in blind phase: {success_count} successful responses; "
+            f"{quorum_target} required"
+        )
+        console.print(f"[red]{message}.[/red]")
         if json_output:
-            result["error"] = "Too few models responded in blind phase"
+            result["error"] = message
             return result
         return ""
 
@@ -264,10 +274,25 @@ async def run_council(
         judge, judge_messages, max_tokens=16384, timeout=300, effort=ReasoningEffort.HIGH
     )
 
+    judge_used = judge
+    if is_error(judge_response) and judge_fallback != judge:
+        console.print(
+            "[yellow]Preferred judge failed; trying subscription fallback "
+            f"{judge_fallback}.[/yellow]"
+        )
+        judge_response = await query_judge(
+            judge_fallback,
+            judge_messages,
+            max_tokens=16384,
+            timeout=300,
+            effort=ReasoningEffort.HIGH,
+        )
+        judge_used = judge_fallback
+
     if is_error(judge_response):
         console.print(f"[red]Judge failed: {judge_response}[/red]")
         if json_output:
-            result["phases"]["judge"] = {"model": judge, "error": judge_response}
+            result["phases"]["judge"] = {"model": judge_used, "error": judge_response}
             return result
         return ""
 
@@ -277,11 +302,13 @@ async def run_council(
         )
     )
     judge_data = {
-        "model": judge,
+        "model": judge_used,
         "response": judge_response,
         "shuffle_traces": shuffle_traces_enabled,
         "prune_cot": prune_cot_enabled,
     }
+    if judge_used != judge:
+        judge_data["preferred_model"] = judge
     if shuffle_seed is not None:
         judge_data["shuffle_seed"] = shuffle_seed
         judge_data["trace_order"] = trace_order
@@ -324,7 +351,7 @@ async def run_council(
         mode="council",
         results=blind_results,
         total_duration_s=duration,
-        judge_model=judge,
+        judge_model=judge_used,
         outcome=outcome,
         outcome_note=outcome_note,
     )

@@ -7,19 +7,19 @@ import json
 import os
 import re
 import time
+from pathlib import Path
 
 import httpx
-from pathlib import Path
 
 from quorate.config import (
     ANTHROPIC_URL,
     ANTHROPIC_VERSION,
     GOOGLE_AI_STUDIO_URL,
-    ModelCallResult,
     OPENROUTER_URL,
     XAI_URL,
     ZHIPU_URL,
     Message,
+    ModelCallResult,
     ModelEntry,
     ReasoningEffort,
     api_keys,
@@ -37,22 +37,53 @@ def _strip_think(content: str) -> str:
     return THINK_RE.sub("", content).strip()
 
 
+def _diagnostic_code(content: str) -> str:
+    """Reduce a provider error to a safe, non-sensitive diagnostic code."""
+    lower = content.lower()
+    http_status = re.search(r"http\s+(\d{3})", lower)
+    if http_status:
+        return f"http_{http_status.group(1)}"
+    if "credit balance" in lower or "insufficient credit" in lower:
+        return "credits"
+    if "timed out" in lower or "timeout" in lower:
+        return "timeout"
+    if "invalid json" in lower:
+        return "invalid_json"
+    if "no response" in lower or "empty" in lower:
+        return "empty_response"
+    if "not found" in lower or "no such file" in lower:
+        return "unavailable"
+    return "provider_error"
+
+
 # --- Provider clients ---
 
 
 async def _openrouter(
-    client: httpx.AsyncClient, api_key: str, model: str,
-    messages: list[Message], max_tokens: int, timeout: float,
+    client: httpx.AsyncClient,
+    api_key: str,
+    model: str,
+    messages: list[Message],
+    max_tokens: int,
+    timeout: float,
     effort: ReasoningEffort | None,
 ) -> ProviderResult:
     if is_thinking_model(model):
         max_tokens = max(max_tokens, 4096)
-        timeout = max(timeout, 300)
-    body: dict = {"model": model, "messages": [m.to_dict() for m in messages], "max_tokens": max_tokens}
+    body: dict = {
+        "model": model,
+        "messages": [m.to_dict() for m in messages],
+        "max_tokens": max_tokens,
+    }
     if effort:
         body["reasoning"] = {"effort": effort.value}
     try:
-        resp = await client.post(OPENROUTER_URL, headers={"Authorization": f"Bearer {api_key}"}, json=body, timeout=timeout)
+        resp = await client.post(
+            OPENROUTER_URL,
+            headers={"Authorization": f"Bearer {api_key}"},
+            json=body,
+            timeout=timeout,
+        )
     except (httpx.TimeoutException, httpx.ConnectError) as exc:
         return f"[Error: {model}: {exc}]", None
     if resp.status_code != 200:
@@ -61,7 +92,11 @@ async def _openrouter(
     if "error" in data:
         return f"[Error: {data['error'].get('message', 'Unknown')}]", None
     usage = data.get("usage")
-    tokens = {"tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")} if usage else None
+    tokens = (
+        {"tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")}
+        if usage
+        else None
+    )
     choices = data.get("choices", [])
     content = ((choices[0].get("message") or {}).get("content") or "").strip() if choices else ""
     text = _strip_think(content) if content else f"[No response from {model}]"
@@ -69,19 +104,36 @@ async def _openrouter(
 
 
 async def _anthropic(
-    client: httpx.AsyncClient, api_key: str, model: str,
-    messages: list[Message], max_tokens: int, timeout: float,
+    client: httpx.AsyncClient,
+    api_key: str,
+    model: str,
+    messages: list[Message],
+    max_tokens: int,
+    timeout: float,
     effort: ReasoningEffort | None,
 ) -> ProviderResult:
     bare = model.removeprefix("anthropic/")
     budget = effort.anthropic_budget() if effort else None
     if budget:
         max_tokens = max(max_tokens, budget + 2000)
-    body: dict = {"model": bare, "messages": [m.to_dict() for m in messages], "max_tokens": max_tokens}
+    body: dict = {
+        "model": bare,
+        "messages": [m.to_dict() for m in messages],
+        "max_tokens": max_tokens,
+    }
     if budget:
         body["thinking"] = {"type": "enabled", "budget_tokens": budget}
     try:
-        resp = await client.post(ANTHROPIC_URL, headers={"x-api-key": api_key, "anthropic-version": ANTHROPIC_VERSION, "content-type": "application/json"}, json=body, timeout=timeout)
+        resp = await client.post(
+            ANTHROPIC_URL,
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": ANTHROPIC_VERSION,
+                "content-type": "application/json",
+            },
+            json=body,
+            timeout=timeout,
+        )
     except (httpx.TimeoutException, httpx.ConnectError) as exc:
         return f"[Error: anthropic {bare}: {exc}]", None
     if resp.status_code != 200:
@@ -90,14 +142,22 @@ async def _anthropic(
     if "error" in data:
         return f"[Error: {data['error'].get('message', 'Unknown')}]", None
     usage = data.get("usage")
-    tokens = {"tokens_in": usage.get("input_tokens"), "tokens_out": usage.get("output_tokens")} if usage else None
+    tokens = (
+        {"tokens_in": usage.get("input_tokens"), "tokens_out": usage.get("output_tokens")}
+        if usage
+        else None
+    )
     text = next((b["text"] for b in data.get("content", []) if b.get("type") == "text"), "").strip()
     return (text if text else f"[No response from anthropic {bare}]"), tokens
 
 
 async def _google(
-    client: httpx.AsyncClient, api_key: str, model: str,
-    messages: list[Message], max_tokens: int, timeout: float,
+    client: httpx.AsyncClient,
+    api_key: str,
+    model: str,
+    messages: list[Message],
+    max_tokens: int,
+    timeout: float,
     effort: ReasoningEffort | None,
 ) -> ProviderResult:
     bare = model.removeprefix("google/")
@@ -126,7 +186,14 @@ async def _google(
     if "error" in data:
         return f"[Error: {data['error'].get('message', 'Unknown')}]", None
     usage = data.get("usageMetadata")
-    tokens = {"tokens_in": usage.get("promptTokenCount"), "tokens_out": usage.get("candidatesTokenCount")} if usage else None
+    tokens = (
+        {
+            "tokens_in": usage.get("promptTokenCount"),
+            "tokens_out": usage.get("candidatesTokenCount"),
+        }
+        if usage
+        else None
+    )
     candidates = data.get("candidates", [])
     parts = (candidates[0].get("content") or {}).get("parts", []) if candidates else []
     text = (parts[0].get("text", "") if parts else "").strip()
@@ -134,16 +201,26 @@ async def _google(
 
 
 async def _xai(
-    client: httpx.AsyncClient, api_key: str, model: str,
-    messages: list[Message], max_tokens: int, timeout: float,
+    client: httpx.AsyncClient,
+    api_key: str,
+    model: str,
+    messages: list[Message],
+    max_tokens: int,
+    timeout: float,
     effort: ReasoningEffort | None,
 ) -> ProviderResult:
     bare = model.removeprefix("x-ai/")
-    body: dict = {"model": bare, "messages": [m.to_dict() for m in messages], "max_tokens": max_tokens}
+    body: dict = {
+        "model": bare,
+        "messages": [m.to_dict() for m in messages],
+        "max_tokens": max_tokens,
+    }
     if effort:
         body["reasoning_effort"] = effort.value
     try:
-        resp = await client.post(XAI_URL, headers={"Authorization": f"Bearer {api_key}"}, json=body, timeout=timeout)
+        resp = await client.post(
+            XAI_URL, headers={"Authorization": f"Bearer {api_key}"}, json=body, timeout=timeout
+        )
     except (httpx.TimeoutException, httpx.ConnectError) as exc:
         return f"[Error: xai {model}: {exc}]", None
     if resp.status_code != 200:
@@ -152,7 +229,11 @@ async def _xai(
     if "error" in data:
         return f"[Error: {data['error'].get('message', 'Unknown')}]", None
     usage = data.get("usage")
-    tokens = {"tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")} if usage else None
+    tokens = (
+        {"tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")}
+        if usage
+        else None
+    )
     choices = data.get("choices", [])
     content = ((choices[0].get("message") or {}).get("content") or "").strip() if choices else ""
     text = _strip_think(content) if content else f"[No response from xai {model}]"
@@ -160,17 +241,29 @@ async def _xai(
 
 
 async def _openai(
-    client: httpx.AsyncClient, api_key: str, model: str,
-    messages: list[Message], max_tokens: int, timeout: float,
+    client: httpx.AsyncClient,
+    api_key: str,
+    model: str,
+    messages: list[Message],
+    max_tokens: int,
+    timeout: float,
     effort: ReasoningEffort | None,
 ) -> ProviderResult:
     bare = model.removeprefix("openai/")
-    body: dict = {"model": bare, "messages": [m.to_dict() for m in messages], "max_tokens": max_tokens}
+    body: dict = {
+        "model": bare,
+        "messages": [m.to_dict() for m in messages],
+        "max_tokens": max_tokens,
+    }
     if effort:
         body["reasoning_effort"] = effort.value if hasattr(effort, "value") else str(effort)
     try:
-        resp = await client.post("https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"}, json=body, timeout=timeout)
+        resp = await client.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json=body,
+            timeout=timeout,
+        )
     except (httpx.TimeoutException, httpx.ConnectError) as exc:
         return f"[Error: openai {bare}: {exc}]", None
     if resp.status_code != 200:
@@ -179,14 +272,23 @@ async def _openai(
     if "error" in data:
         return f"[Error: {data['error'].get('message', 'Unknown')}]", None
     usage = data.get("usage")
-    tokens = {"tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")} if usage else None
+    tokens = (
+        {"tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")}
+        if usage
+        else None
+    )
     choices = data.get("choices", [])
     content = ((choices[0].get("message") or {}).get("content") or "").strip() if choices else ""
     text = _strip_think(content) if content else f"[No response from openai {bare}]"
     return text, tokens
 
 
-async def _codex_exec(model: str, messages: list[Message], timeout: float) -> ProviderResult:
+async def _codex_exec(
+    model: str,
+    messages: list[Message],
+    timeout: float,
+    effort: ReasoningEffort | None,
+) -> ProviderResult:
     """Query Codex CLI exec mode (uses Codex Pro subscription)."""
     bare = model.removeprefix("openai/")
     # Codex uses base model names (gpt-5.4, not gpt-5.4-pro)
@@ -203,23 +305,35 @@ async def _codex_exec(model: str, messages: list[Message], timeout: float) -> Pr
     if not prompt:
         return f"[Error: Empty prompt for codex {bare}]", None
     import tempfile
+
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as tmp:
         outfile = tmp.name
+    reasoning_effort = effort.value if effort else "xhigh"
     try:
         proc = await asyncio.wait_for(
             asyncio.create_subprocess_exec(
-                "codex", "exec", "-m", bare, "-o", outfile, "--skip-git-repo-check",
-                "-c", 'model_reasoning_effort="xhigh"', prompt,
+                "codex",
+                "exec",
+                "-m",
+                bare,
+                "-o",
+                outfile,
+                "--skip-git-repo-check",
+                "-c",
+                f'model_reasoning_effort="{reasoning_effort}"',
+                prompt,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-            ), timeout=timeout,
+            ),
+            timeout=timeout,
         )
         await asyncio.wait_for(proc.communicate(input=b"\n"), timeout=timeout)
     except (asyncio.TimeoutError, FileNotFoundError) as exc:
         return f"[Error: codex exec {bare}: {exc}]", None
     finally:
         import os
+
         result = ""
         if os.path.exists(outfile):
             result = Path(outfile).read_text().strip()
@@ -229,7 +343,12 @@ async def _codex_exec(model: str, messages: list[Message], timeout: float) -> Pr
     return (result if result else f"[No response from codex {bare}]"), None
 
 
-async def _claude_print(model: str, messages: list[Message], timeout: float) -> ProviderResult:
+async def _claude_print(
+    model: str,
+    messages: list[Message],
+    timeout: float,
+    effort: ReasoningEffort | None,
+) -> ProviderResult:
     """Query Claude Code CLI --print (Max subscription)."""
     bare = model.removeprefix("anthropic/")
     sections = []
@@ -244,13 +363,19 @@ async def _claude_print(model: str, messages: list[Message], timeout: float) -> 
     # Strip ANTHROPIC_API_KEY so claude --print uses Max subscription, not depleted API credits
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
     proc = None
+    command = ["claude", "--model", bare, "--print", "--output-format", "json"]
+    if effort:
+        command.extend(["--effort", effort.value])
+    command.extend(["-p", prompt])
     try:
         proc = await asyncio.wait_for(
             asyncio.create_subprocess_exec(
-                "claude", "--model", bare, "--print", "--output-format", "json", "-p", prompt,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
                 env=env,
-            ), timeout=timeout,
+            ),
+            timeout=timeout,
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except (asyncio.TimeoutError, FileNotFoundError) as exc:
@@ -258,7 +383,11 @@ async def _claude_print(model: str, messages: list[Message], timeout: float) -> 
             proc.kill()
         return f"[Error: claude --print {bare}: {exc}]", None
     if proc.returncode != 0:
-        return f"[Error: claude --print {bare}: {(stderr or b'').decode().strip() or f'exit {proc.returncode}'}]", None
+        detail = (stderr or b"").decode().strip() or f"exit {proc.returncode}"
+        return (
+            f"[Error: claude --print {bare}: {detail}]",
+            None,
+        )
     try:
         data = json.loads(stdout.decode())
     except json.JSONDecodeError:
@@ -270,7 +399,11 @@ async def _claude_print(model: str, messages: list[Message], timeout: float) -> 
         return f"[Error: {result or 'empty'}]", None
     # claude --print JSON includes token usage
     usage = data.get("usage")
-    tokens = {"tokens_in": usage.get("input_tokens"), "tokens_out": usage.get("output_tokens")} if usage else None
+    tokens = (
+        {"tokens_in": usage.get("input_tokens"), "tokens_out": usage.get("output_tokens")}
+        if usage
+        else None
+    )
     return _strip_think(result), tokens
 
 
@@ -287,15 +420,29 @@ async def _gemini_prompt(model: str, messages: list[Message], timeout: float) ->
     if not prompt:
         return f"[Error: Empty prompt for gemini {bare}]", None
     proc = None
-    # Use headless config (no hooks) to avoid stdout pollution and latency
-    env = {**os.environ, "GEMINI_HOME": os.path.expanduser("~/.gemini-headless")}
+    # Strip API keys so Gemini CLI uses the existing subscription login. Its JSON parser
+    # tolerates any hook preamble from the standard user config.
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {"GOOGLE_API_KEY", "GEMINI_API_KEY"}
+    }
+    env.pop("GEMINI_HOME", None)
     try:
         proc = await asyncio.wait_for(
             asyncio.create_subprocess_exec(
-                "gemini", "-p", prompt, "-m", bare, "-o", "json",
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                "gemini",
+                "-p",
+                prompt,
+                "-m",
+                bare,
+                "-o",
+                "json",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
                 env=env,
-            ), timeout=timeout,
+            ),
+            timeout=timeout,
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except (asyncio.TimeoutError, FileNotFoundError) as exc:
@@ -303,7 +450,11 @@ async def _gemini_prompt(model: str, messages: list[Message], timeout: float) ->
             proc.kill()
         return f"[Error: gemini -p {bare}: {exc}]", None
     if proc.returncode != 0:
-        return f"[Error: gemini -p {bare}: {(stderr or b'').decode().strip() or f'exit {proc.returncode}'}]", None
+        detail = (stderr or b"").decode().strip() or f"exit {proc.returncode}"
+        return (
+            f"[Error: gemini -p {bare}: {detail}]",
+            None,
+        )
     raw = stdout.decode()
     # Gemini hooks may prepend text before JSON — scan for first '{'
     json_start = raw.find("{")
@@ -326,27 +477,41 @@ async def _gemini_prompt(model: str, messages: list[Message], timeout: float) ->
 
 
 async def _zhipu(
-    client: httpx.AsyncClient, api_key: str, model: str,
-    messages: list[Message], max_tokens: int, timeout: float,
+    client: httpx.AsyncClient,
+    api_key: str,
+    model: str,
+    messages: list[Message],
+    max_tokens: int,
+    timeout: float,
     effort: ReasoningEffort | None,
 ) -> ProviderResult:
     """Query ZhiPu API directly (free tier)."""
-    body: dict = {"model": model, "messages": [m.to_dict() for m in messages], "max_tokens": max_tokens}
+    bare = model.removeprefix("z-ai/").removeprefix("zhipu/")
+    body: dict = {
+        "model": bare,
+        "messages": [m.to_dict() for m in messages],
+        "max_tokens": max_tokens,
+    }
     try:
         resp = await client.post(
             ZHIPU_URL,
             headers={"Authorization": f"Bearer {api_key}"},
-            json=body, timeout=timeout,
+            json=body,
+            timeout=timeout,
         )
     except (httpx.TimeoutException, httpx.ConnectError) as exc:
-        return f"[Error: zhipu {model}: {exc}]", None
+        return f"[Error: zhipu {bare}: {exc}]", None
     if resp.status_code != 200:
-        return f"[Error: HTTP {resp.status_code} from zhipu {model}]", None
+        return f"[Error: HTTP {resp.status_code} from zhipu {bare}]", None
     data = resp.json()
     if "error" in data:
         return f"[Error: {data['error'].get('message', 'Unknown')}]", None
     usage = data.get("usage")
-    tokens = {"tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")} if usage else None
+    tokens = (
+        {"tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")}
+        if usage
+        else None
+    )
     choices = data.get("choices", [])
     content = ((choices[0].get("message") or {}).get("content") or "").strip() if choices else ""
     text = _strip_think(content) if content else f"[No response from zhipu {model}]"
@@ -385,66 +550,169 @@ async def query_model(
     if is_thinking_model(entry.model):
         timeout = max(timeout, 180)
     start = time.monotonic()
+    deadline = start + timeout
+    subscription_timeout = min(120.0, timeout * 0.75)
+    diagnostics: list[str] = []
 
-    def _result(content: str, used_provider: str, tokens: dict[str, int] | None = None) -> ModelCallResult:
+    def _remaining_timeout() -> float:
+        return max(1.0, deadline - time.monotonic())
+
+    def _record_failure(route: str, content: str) -> None:
+        diagnostics.append(f"{route}:{_diagnostic_code(content)}")
+
+    def _record_missing(route: str) -> None:
+        diagnostics.append(f"{route}:no_credentials")
+
+    def _result(
+        content: str,
+        used_provider: str,
+        tokens: dict[str, int] | None = None,
+    ) -> ModelCallResult:
         return ModelCallResult(
-            name=entry.name, model_id=model_name, response=content,
-            provider=used_provider, latency_s=time.monotonic() - start,
+            name=entry.name,
+            model_id=model_name,
+            response=content,
+            provider=used_provider,
+            latency_s=time.monotonic() - start,
             tokens_in=tokens.get("tokens_in") if tokens else None,
             tokens_out=tokens.get("tokens_out") if tokens else None,
+            diagnostics=tuple(diagnostics),
         )
 
     # Try native provider
     if provider == "anthropic":
-        content, tokens = await _claude_print(entry.model, messages, timeout)
+        content, tokens = await _claude_print(
+            entry.model,
+            messages,
+            min(subscription_timeout, _remaining_timeout()),
+            effort,
+        )
         if not is_error(content):
             return _result(content, "claude-print", tokens)
+        _record_failure("claude-print", content)
         anthropic_key = keys.get("anthropic")
         if anthropic_key:
-            content, tokens = await _anthropic(client, anthropic_key, entry.model, messages, max_tokens, timeout, effort)
+            content, tokens = await _anthropic(
+                client,
+                anthropic_key,
+                entry.model,
+                messages,
+                max_tokens,
+                _remaining_timeout(),
+                effort,
+            )
             if not is_error(content):
                 return _result(content, "anthropic-api", tokens)
+            _record_failure("anthropic-api", content)
+        else:
+            _record_missing("anthropic-api")
 
     elif provider == "google":
-        content, tokens = await _gemini_prompt(entry.model, messages, timeout)
+        content, tokens = await _gemini_prompt(
+            entry.model,
+            messages,
+            min(subscription_timeout, _remaining_timeout()),
+        )
         if not is_error(content):
             return _result(content, "gemini-cli", tokens)
+        _record_failure("gemini-cli", content)
         google_key = keys.get("google")
         if google_key:
-            content, tokens = await _google(client, google_key, entry.model, messages, max_tokens, timeout, effort)
+            content, tokens = await _google(
+                client,
+                google_key,
+                entry.model,
+                messages,
+                max_tokens,
+                _remaining_timeout(),
+                effort,
+            )
             if not is_error(content):
                 return _result(content, "google-ai-studio", tokens)
+            _record_failure("google-ai-studio", content)
+        else:
+            _record_missing("google-ai-studio")
 
     elif provider == "xai":
         xai_key = keys.get("xai")
         if xai_key:
-            content, tokens = await _xai(client, xai_key, entry.model, messages, max_tokens, timeout, effort)
+            content, tokens = await _xai(
+                client,
+                xai_key,
+                entry.model,
+                messages,
+                max_tokens,
+                _remaining_timeout(),
+                effort,
+            )
             if not is_error(content):
                 return _result(content, "xai-native", tokens)
+            _record_failure("xai-native", content)
+        else:
+            _record_missing("xai-native")
 
     elif provider == "openai":
-        content, tokens = await _codex_exec(entry.model, messages, timeout)
+        content, tokens = await _codex_exec(
+            entry.model,
+            messages,
+            min(subscription_timeout, _remaining_timeout()),
+            effort,
+        )
         if not is_error(content):
             return _result(content, "codex-exec", tokens)
+        _record_failure("codex-exec", content)
         openai_key = keys.get("openai")
         if openai_key:
-            content, tokens = await _openai(client, openai_key, entry.model, messages, max_tokens, timeout, effort)
+            content, tokens = await _openai(
+                client,
+                openai_key,
+                entry.model,
+                messages,
+                max_tokens,
+                _remaining_timeout(),
+                effort,
+            )
             if not is_error(content):
                 return _result(content, "openai-api", tokens)
+            _record_failure("openai-api", content)
+        else:
+            _record_missing("openai-api")
 
     elif provider == "zhipu":
         zhipu_key = keys.get("zhipu")
         if zhipu_key:
-            content, tokens = await _zhipu(client, zhipu_key, entry.model, messages, max_tokens, timeout, effort)
+            content, tokens = await _zhipu(
+                client,
+                zhipu_key,
+                entry.model,
+                messages,
+                max_tokens,
+                _remaining_timeout(),
+                effort,
+            )
             if not is_error(content):
                 return _result(content, "zhipu-native", tokens)
+            _record_failure("zhipu-native", content)
+        else:
+            _record_missing("zhipu-native")
 
     # OpenRouter fallback
     openrouter_key = keys.get("openrouter")
     if openrouter_key:
-        content, tokens = await _openrouter(client, openrouter_key, entry.model, messages, max_tokens, timeout, effort)
+        content, tokens = await _openrouter(
+            client,
+            openrouter_key,
+            entry.model,
+            messages,
+            max_tokens,
+            _remaining_timeout(),
+            effort,
+        )
         if not is_error(content):
             return _result(content, "openrouter", tokens)
+        _record_failure("openrouter", content)
+    else:
+        _record_missing("openrouter")
 
     return _result(f"[Error: All providers failed for {entry.name}]", "none")
 
@@ -462,7 +730,7 @@ async def run_parallel(
         tasks = [
             asyncio.wait_for(
                 query_model(client, keys, entry, messages, max_tokens, timeout, effort),
-                timeout=max(timeout, 180 if is_thinking_model(entry.model) else timeout),
+                timeout=max(timeout, 180 if is_thinking_model(entry.model) else timeout) + 5,
             )
             for entry in models
         ]
@@ -470,19 +738,32 @@ async def run_parallel(
     output: list[ModelCallResult] = []
     for idx, result in enumerate(results):
         if isinstance(result, Exception):
-            output.append(ModelCallResult(
-                name=models[idx].name, model_id=models[idx].name,
-                response=f"[Error: {models[idx].name} timed out]",
-                provider="timeout",
-            ))
+            output.append(
+                ModelCallResult(
+                    name=models[idx].name,
+                    model_id=models[idx].name,
+                    response=f"[Error: {models[idx].name} timed out]",
+                    provider="timeout",
+                    diagnostics=("orchestrator:timeout",),
+                )
+            )
         else:
             output.append(result)
     return output
 
 
+def quorum_health(results: list[ModelCallResult]) -> tuple[int, int, bool]:
+    """Return successful seats, strict-majority target, and quorum state."""
+    success_count = sum(not result.is_error for result in results)
+    quorum_target = max(2, len(results) // 2 + 1)
+    return success_count, quorum_target, success_count >= quorum_target
+
+
 async def query_judge(
-    model: str, messages: list[Message],
-    max_tokens: int = 16384, timeout: float = 300,
+    model: str,
+    messages: list[Message],
+    max_tokens: int = 16384,
+    timeout: float = 300,
     effort: ReasoningEffort | None = None,
 ) -> str:
     """Query judge model with native-first fallback. Returns content string."""
@@ -495,26 +776,45 @@ async def query_judge(
                 return content
             google_key = keys.get("google")
             if google_key:
-                content, _ = await _google(client, google_key, model, messages, max_tokens, timeout, effort)
+                content, _ = await _google(
+                    client, google_key, model, messages, max_tokens, timeout, effort
+                )
                 if not is_error(content):
                     return content
         if provider == "anthropic":
-            content, _ = await _claude_print(model, messages, timeout)
+            content, _ = await _claude_print(model, messages, timeout, effort)
             if not is_error(content):
                 return content
             anthropic_key = keys.get("anthropic")
             if anthropic_key:
-                content, _ = await _anthropic(client, anthropic_key, model, messages, max_tokens, timeout, effort)
+                content, _ = await _anthropic(
+                    client, anthropic_key, model, messages, max_tokens, timeout, effort
+                )
+                if not is_error(content):
+                    return content
+        if provider == "openai":
+            content, _ = await _codex_exec(model, messages, timeout, effort)
+            if not is_error(content):
+                return content
+            openai_key = keys.get("openai")
+            if openai_key:
+                content, _ = await _openai(
+                    client, openai_key, model, messages, max_tokens, timeout, effort
+                )
                 if not is_error(content):
                     return content
         if provider == "zhipu":
             zhipu_key = keys.get("zhipu")
             if zhipu_key:
-                content, _ = await _zhipu(client, zhipu_key, model, messages, max_tokens, timeout, effort)
+                content, _ = await _zhipu(
+                    client, zhipu_key, model, messages, max_tokens, timeout, effort
+                )
                 if not is_error(content):
                     return content
         openrouter_key = keys.get("openrouter")
         if openrouter_key:
-            content, _ = await _openrouter(client, openrouter_key, model, messages, max_tokens, timeout, effort)
+            content, _ = await _openrouter(
+                client, openrouter_key, model, messages, max_tokens, timeout, effort
+            )
             return content
     return f"[Error: No providers available for judge {model}]"

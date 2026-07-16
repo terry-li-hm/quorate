@@ -1,8 +1,6 @@
 """Tests for quorate.config — model resolution, display names, error detection."""
 
-import pytest
 from quorate.config import (
-    ModelEntry,
     Message,
     ReasoningEffort,
     _display_name,
@@ -11,8 +9,9 @@ from quorate.config import (
     model_max_tokens,
     quick_models,
     resolved_council,
-    resolved_judge,
     resolved_critique,
+    resolved_judge,
+    resolved_judge_fallback,
 )
 
 
@@ -115,4 +114,17 @@ class TestCouncilResolution:
         assert "gemini" in resolved_judge().lower()
 
     def test_critique_default(self):
-        assert "opus" in resolved_critique().lower()
+        assert resolved_critique() == "anthropic/claude-opus-4-8"
+
+    def test_judge_subscription_fallback(self):
+        assert resolved_judge_fallback() == "openai/gpt-5.6-sol"
+
+    def test_frontier_defaults_preserve_generalist_diversity(self):
+        assert [entry.model for entry in resolved_council()] == [
+            "openai/gpt-5.6-sol",
+            "anthropic/claude-fable-5",
+            "x-ai/grok-4.5",
+            "moonshotai/kimi-k2.6",
+            "z-ai/glm-5.2",
+            "xiaomi/mimo-v2.5-pro",
+        ]

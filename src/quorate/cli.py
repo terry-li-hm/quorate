@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 from pathlib import Path
 from typing import Annotated
 
 import cyclopts
-from porin import EXIT_ERROR, CommandTree, action, emit_err, emit_ok
+from porin import EXIT_ERROR, CommandTree, action, emit_err, emit_ok, err
 from rich.console import Console
 
 from quorate import __version__
@@ -290,6 +291,18 @@ def _emit_result(command: str, result: str | dict | None, json_output: bool) -> 
             fix="Check model availability with: quorate quick 'test'",
         )
         return
+    if isinstance(result, dict) and result.get("quorum_achieved") is False:
+        success_count = result.get("success_count", 0)
+        quorum_target = result.get("quorum_target", 0)
+        envelope = err(
+            command,
+            f"No quorum: {success_count} successful responses; {quorum_target} required",
+            EXIT_ERROR,
+            fix="Run a sanitized smoke test and inspect each failed route's diagnostics.",
+        )
+        envelope["result"] = result
+        print(json.dumps(envelope, ensure_ascii=False))
+        raise SystemExit(EXIT_ERROR)
     data = result if isinstance(result, dict) else {"response": result}
     emit_ok(
         command,

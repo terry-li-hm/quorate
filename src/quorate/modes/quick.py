@@ -10,7 +10,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 
 from quorate import runlog
-from quorate.api import run_parallel
+from quorate.api import quorum_health, run_parallel
 from quorate.config import Message, ModelEntry, ReasoningEffort, quick_models
 
 
@@ -32,7 +32,14 @@ async def run_quick(
     console.print(f"[dim](querying {len(models)} models in parallel...)[/dim]\n")
     start = time.monotonic()
 
-    results = await run_parallel(models, messages, max_tokens=2048, timeout=max(timeout, 180), effort=effort)
+    effective_effort = effort or ReasoningEffort.MEDIUM
+    results = await run_parallel(
+        models,
+        messages,
+        max_tokens=2048,
+        timeout=max(timeout, 180),
+        effort=effective_effort,
+    )
 
     duration = time.monotonic() - start
     transcript_parts = []
@@ -42,14 +49,24 @@ async def run_quick(
         if mcr.is_error:
             console.print(f"[red]{mcr.name}: {mcr.response}[/red]")
         else:
-            console.print(Panel(Markdown(mcr.response), title=f"[bold]{mcr.name}[/bold]", border_style="dim"))
+            console.print(
+                Panel(Markdown(mcr.response), title=f"[bold]{mcr.name}[/bold]", border_style="dim")
+            )
             transcript_parts.append(f"### {mcr.name}\n{mcr.response}")
         responses_json.append(mcr.to_dict())
 
     failed = [mcr for mcr in results if mcr.is_error]
+    success_count, quorum_target, quorum_achieved = quorum_health(results)
     if failed:
         names = ", ".join(mcr.name for mcr in failed)
-        console.print(f"\n[bold red]⚠ {len(failed)}/{len(results)} models failed: {names}[/bold red]")
+        console.print(
+            f"\n[bold red]⚠ {len(failed)}/{len(results)} models failed: {names}[/bold red]"
+        )
+    if not quorum_achieved:
+        console.print(
+            f"[bold red]No quorum: {success_count} successful responses; "
+            f"{quorum_target} required.[/bold red]"
+        )
 
     record = runlog.build_record(mode="quick", results=results, total_duration_s=duration)
     runlog.append(record)
@@ -63,7 +80,10 @@ async def run_quick(
         return {
             "question": question,
             "responses": responses_json,
+            "success_count": success_count,
             "failed_count": len(failed),
+            "quorum_target": quorum_target,
+            "quorum_achieved": quorum_achieved,
             "duration_s": round(duration, 1),
         }
 

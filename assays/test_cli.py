@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from quorate.cli import _resolve_context, _resolve_question
+from quorate.cli import _emit_result, _resolve_context, _resolve_question
 
 
 def test_resolve_question_long_string_returns_unchanged():
@@ -59,3 +59,21 @@ def test_resolve_context_allows_file_outside_protected_root(tmp_path: Path, monk
     monkeypatch.setenv("QUORATE_PROTECTED_ROOTS", str(protected))
 
     assert _resolve_context((str(context),)) == "public material"
+
+
+def test_emit_result_marks_missing_quorum_as_error(capsys):
+    result = {
+        "responses": [],
+        "success_count": 1,
+        "failed_count": 6,
+        "quorum_target": 4,
+        "quorum_achieved": False,
+    }
+
+    with pytest.raises(SystemExit):
+        _emit_result("quorate quick", result, json_output=True)
+
+    envelope = capsys.readouterr().out
+    assert '"ok": false' in envelope
+    assert '"result"' in envelope
+    assert '"quorum_achieved": false' in envelope

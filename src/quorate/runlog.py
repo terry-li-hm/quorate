@@ -19,15 +19,22 @@ def _default_log_path() -> Path:
 
 
 PRICES: dict[str, tuple[float, float]] = {
-    "gemini-3.1-pro-preview": (1.25, 10.00),
-    "gpt-5.5":                (2.50, 10.00),
-    "claude-opus-4-7":        (15.00, 75.00),
-    "grok-4.3":               (3.00, 15.00),
+    "gemini-3.1-pro-preview": (2.00, 12.00),
+    "gpt-5.6-sol": (5.00, 30.00),
+    "gpt-5.5": (2.50, 10.00),
+    "claude-fable-5": (10.00, 50.00),
+    "claude-opus-4-8": (5.00, 25.00),
+    "claude-opus-4-7": (15.00, 75.00),
+    "grok-4.5": (2.00, 6.00),
+    "grok-4.3": (3.00, 15.00),
     "grok-4.20-0309-reasoning": (3.00, 15.00),
-    "kimi-k2.6":              (0.60, 2.50),
-    "glm-5.1":                (0.0, 0.0),
-    "mimo-v2.5-pro":          (0.0, 0.0),
+    "kimi-k2.6": (0.66, 3.41),
+    "glm-5.2": (0.9576, 3.0096),
+    "glm-5.1": (0.0, 0.0),
+    "mimo-v2.5-pro": (0.435, 0.87),
 }
+
+ZERO_MARGINAL_COST_PROVIDERS = {"codex-exec", "claude-print", "gemini-cli", "zhipu-native"}
 
 
 def price_for(model_id: str) -> tuple[float, float]:
@@ -43,6 +50,8 @@ def price_for(model_id: str) -> tuple[float, float]:
 
 def estimate_cost(result: ModelCallResult) -> float:
     """USD estimate for one ModelCallResult. Returns 0.0 if priced at 0 or no tokens."""
+    if result.provider in ZERO_MARGINAL_COST_PROVIDERS:
+        return 0.0
     if not result.tokens_in and not result.tokens_out:
         return 0.0
     in_price, out_price = price_for(result.model_id)
@@ -56,6 +65,8 @@ def estimate_cost(result: ModelCallResult) -> float:
 
 def split_cost(result: ModelCallResult) -> tuple[float, float]:
     """Returns (input_cost_usd, output_cost_usd) for a single result."""
+    if result.provider in ZERO_MARGINAL_COST_PROVIDERS:
+        return (0.0, 0.0)
     in_price, out_price = price_for(result.model_id)
     in_cost = ((result.tokens_in or 0) / 1_000_000) * in_price
     out_cost = ((result.tokens_out or 0) / 1_000_000) * out_price
@@ -65,6 +76,7 @@ def split_cost(result: ModelCallResult) -> tuple[float, float]:
 @dataclass
 class RunRecord:
     """One quorate run, serialised to JSONL."""
+
     ts: str
     mode: str
     models: list[dict]
@@ -92,14 +104,18 @@ class RunRecord:
 
 
 def _model_row(result: ModelCallResult) -> dict:
-    return {
+    row = {
         "name": result.name,
         "model_id": result.model_id,
+        "provider": result.provider,
         "duration_s": round(result.latency_s, 2),
         "tokens_in": result.tokens_in,
         "tokens_out": result.tokens_out,
         "ok": not result.is_error,
     }
+    if result.diagnostics:
+        row["diagnostics"] = list(result.diagnostics)
+    return row
 
 
 def build_record(
@@ -196,5 +212,7 @@ def format_footer(
     in_cost = sum(split_cost(r)[0] for r in all_results)
     out_cost = sum(split_cost(r)[1] for r in all_results)
     total_cost = in_cost + out_cost
-    summary = f"({total_duration_s:.1f}s) — ${total_cost:.4f} (in: ${in_cost:.4f}, out: ${out_cost:.4f})"
+    summary = (
+        f"({total_duration_s:.1f}s) — ${total_cost:.4f} (in: ${in_cost:.4f}, out: ${out_cost:.4f})"
+    )
     return lines, summary

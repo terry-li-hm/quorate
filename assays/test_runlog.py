@@ -6,8 +6,8 @@ import json
 
 import pytest
 
-from quorate.config import ModelCallResult
 from quorate import runlog
+from quorate.config import ModelCallResult
 
 
 def _result(
@@ -17,11 +17,18 @@ def _result(
     tokens_out: int | None = 200,
     latency: float = 3.2,
     response: str = "ok",
+    provider: str = "xai-native",
+    diagnostics: tuple[str, ...] = (),
 ) -> ModelCallResult:
     return ModelCallResult(
-        name=name, model_id=model_id, response=response,
-        provider="xai-native", latency_s=latency,
-        tokens_in=tokens_in, tokens_out=tokens_out,
+        name=name,
+        model_id=model_id,
+        response=response,
+        provider=provider,
+        latency_s=latency,
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
+        diagnostics=diagnostics,
     )
 
 
@@ -59,10 +66,23 @@ class TestEstimateCost:
         r = _result(model_id="fake-model", tokens_in=1000, tokens_out=1000)
         assert runlog.estimate_cost(r) == 0.0
 
+    @pytest.mark.parametrize("provider", ["codex-exec", "claude-print", "gemini-cli"])
+    def test_subscription_routes_have_zero_marginal_cost(self, provider):
+        r = _result(
+            model_id="claude-fable-5",
+            tokens_in=1_000_000,
+            tokens_out=1_000_000,
+            provider=provider,
+        )
+        assert runlog.estimate_cost(r) == 0.0
+
 
 class TestBuildRecord:
     def test_basic(self):
-        results = [_result(), _result(name="GPT-5.5", model_id="gpt-5.5", tokens_in=50, tokens_out=80)]
+        results = [
+            _result(),
+            _result(name="GPT-5.5", model_id="gpt-5.5", tokens_in=50, tokens_out=80),
+        ]
         record = runlog.build_record("quick", results, total_duration_s=12.5)
         d = record.to_dict()
         assert d["mode"] == "quick"
@@ -73,9 +93,18 @@ class TestBuildRecord:
         assert d["est_cost_usd"] > 0
 
     def test_failed_model_marked(self):
-        bad = _result(response="[Error: HTTP 500]")
+        bad = _result(
+            response="[Error: All providers failed]",
+            provider="none",
+            diagnostics=("xai-native:http_404", "openrouter:http_403"),
+        )
         record = runlog.build_record("quick", [bad], total_duration_s=1.0)
         assert record.models[0]["ok"] is False
+        assert record.models[0]["provider"] == "none"
+        assert record.models[0]["diagnostics"] == [
+            "xai-native:http_404",
+            "openrouter:http_403",
+        ]
 
 
 class TestAppend:
@@ -134,8 +163,11 @@ class TestOutcome:
 
     def test_record_serialises_outcome(self):
         rec = runlog.build_record(
-            "council", [_result()], total_duration_s=1.0,
-            outcome="inverted", outcome_note="changed the decision",
+            "council",
+            [_result()],
+            total_duration_s=1.0,
+            outcome="inverted",
+            outcome_note="changed the decision",
         )
         d = rec.to_dict()
         assert d["outcome"] == "inverted"
@@ -147,10 +179,10 @@ class TestOutcome:
         assert d["outcome"] is None
         assert d["outcome_note"] is None
 
-
     def test_prompt_outcome_tty_branch(self, monkeypatch):
         # the capture path: interactive TTY + a real reply must parse through
         import builtins
+
         monkeypatch.setattr(runlog.sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr(runlog.sys.stdout, "isatty", lambda: True)
         monkeypatch.setattr(builtins, "input", lambda *a: "i changed my call")
@@ -159,9 +191,12 @@ class TestOutcome:
     def test_prompt_outcome_eof_mid_prompt_is_safe(self, monkeypatch):
         # Ctrl-D / EOF at the prompt must not crash a finished council
         import builtins
+
         monkeypatch.setattr(runlog.sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr(runlog.sys.stdout, "isatty", lambda: True)
+
         def _eof(*a):
             raise EOFError
+
         monkeypatch.setattr(builtins, "input", _eof)
         assert runlog.prompt_outcome() == (None, None)

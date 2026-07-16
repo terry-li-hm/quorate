@@ -12,20 +12,27 @@ uvx quorate quick "Should I learn Rust?"
 pip install quorate
 ```
 
+On the Vivesca host, install through the local helper so the ordinary `quorate`
+command enters the 1Password effector and can use subscription and API routes:
+
+```bash
+scripts/install-local.sh
+```
+
 ## Models
 
 The six council debaters (`resolved_council()` in `config.py`):
 
 | Model | Provider (native → fallback) |
 |-------|------------------------------|
-| GPT-5.5 | OpenAI Codex CLI → OpenAI API → OpenRouter |
-| Claude Opus 4.7 | Claude CLI → Anthropic API → OpenRouter |
-| Grok 4.3 | xAI API → OpenRouter |
+| GPT-5.6 Sol | OpenAI Codex CLI → OpenAI API → OpenRouter |
+| Claude Fable 5 | Claude CLI → Anthropic API → OpenRouter |
+| Grok 4.5 | xAI API → OpenRouter |
 | Kimi K2.6 | OpenRouter (Moonshot) |
-| GLM-5.1 | ZhiPu API → OpenRouter |
+| GLM-5.2 | ZhiPu API → OpenRouter |
 | MiMo v2.5 Pro | OpenRouter (Xiaomi) |
 
-Judge: Gemini 3.1 Pro (Gemini CLI → Google AI Studio → OpenRouter). Critic: Claude Opus 4.7.
+Judge: Gemini 3.1 Pro (Gemini CLI → Google AI Studio → OpenRouter), with GPT-5.6 Sol through the Codex subscription as the cross-vendor fallback. Critic: Claude Opus 4.8.
 
 Any seat is overridable via `CONSILIUM_MODEL_M1`…`M6`, `CONSILIUM_MODEL_JUDGE`, and `CONSILIUM_MODEL_CRITIQUE`.
 
@@ -110,7 +117,9 @@ export OPENROUTER_API_KEY="..."       # Kimi, MiMo, and fallback for all
 export QUORATE_OPENROUTER_KEY="..."   # Dedicated OpenRouter key (takes priority)
 ```
 
-GPT-5.5 uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, and Gemini uses the Gemini CLI (`gemini -p`) — all route through their respective subscriptions at zero per-token cost, falling back to the direct API and then OpenRouter.
+GPT-5.6 Sol uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, and Gemini uses the Gemini CLI (`gemini -p`) — all route through their respective subscriptions at zero marginal cost, falling back to the direct API and then OpenRouter. Telemetry records the model and route actually used, and subscription-backed calls are not priced as API usage.
+
+Scripted runs require a strict majority of configured seats. Quick mode therefore needs four of seven successful responses, while council needs four of six in its blind phase. A degraded run returns a non-zero JSON error envelope containing the partial responses and safe route diagnostics such as `http_404`, `timeout`, or `no_credentials`; provider prose and secrets are never copied into diagnostics.
 
 ## How it works
 

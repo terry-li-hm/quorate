@@ -1,6 +1,6 @@
 [project]
 name = "quorate"
-version = "0.1.1"
+version = "0.2.0"
 description = "Multi-model deliberation CLI — frontier LLMs debate, then judge"
 license = "MIT"
 readme = "README.md"
@@ -14,6 +14,8 @@ dependencies = [
 
 [project.scripts]
 quorate = "quorate.cli:app"
+quorate-core = "quorate.cli:app"
+
 
 [build-system]
 requires = ["hatchling"]
