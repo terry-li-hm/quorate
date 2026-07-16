@@ -20,6 +20,7 @@ from quorate.config import (
     is_error,
     resolved_council,
     resolved_critique,
+    resolved_critique_fallback,
     resolved_judge,
     resolved_judge_fallback,
 )
@@ -122,6 +123,7 @@ async def run_council(
     judge = resolved_judge(judge_model)
     judge_fallback = resolved_judge_fallback()
     critique = resolved_critique(critic_model)
+    critique_fallback = resolved_critique_fallback()
 
     full_question = f"{context}\n\n{question}" if context else question
     start = time.monotonic()
@@ -326,6 +328,19 @@ async def run_council(
         critique_response = await query_judge(
             critique, critique_messages, max_tokens=4096, timeout=120
         )
+        critique_used = critique
+        if is_error(critique_response) and critique_fallback != critique:
+            console.print(
+                "[yellow]Preferred critic failed; trying subscription fallback "
+                f"{critique_fallback}.[/yellow]"
+            )
+            critique_response = await query_judge(
+                critique_fallback,
+                critique_messages,
+                max_tokens=4096,
+                timeout=120,
+            )
+            critique_used = critique_fallback
         if not is_error(critique_response):
             console.print(
                 Panel(
@@ -334,7 +349,9 @@ async def run_council(
                     border_style="yellow",
                 )
             )
-            critique_data = {"model": str(critique), "response": critique_response}
+            critique_data = {"model": str(critique_used), "response": critique_response}
+            if critique_used != critique:
+                critique_data["preferred_model"] = critique
             if json_output:
                 result["phases"]["critique"] = critique_data
                 stream_event("critique", critique_data)

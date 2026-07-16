@@ -4,12 +4,14 @@ from quorate.config import (
     Message,
     ReasoningEffort,
     _display_name,
+    benchmark_models,
     is_error,
     is_thinking_model,
     model_max_tokens,
     quick_models,
     resolved_council,
     resolved_critique,
+    resolved_critique_fallback,
     resolved_judge,
     resolved_judge_fallback,
 )
@@ -110,15 +112,22 @@ class TestCouncilResolution:
     def test_quick_returns_7(self):
         assert len(quick_models()) == 7
 
+    def test_benchmark_covers_critic_route(self):
+        assert len(benchmark_models()) == 8
+        assert benchmark_models()[-1].model == "google/gemini-3.5-flash"
+
     def test_judge_default(self):
-        assert resolved_judge() == "google/gemini-3.5-flash"
+        assert resolved_judge() == "anthropic/claude-fable-5"
 
     def test_gemini_alias_uses_stable_judge(self, monkeypatch):
         monkeypatch.setenv("CONSILIUM_MODEL_JUDGE", "gemini")
         assert resolved_judge() == "google/gemini-3.5-flash"
 
     def test_critique_default(self):
-        assert resolved_critique() == "anthropic/claude-opus-4-8"
+        assert resolved_critique() == "google/gemini-3.5-flash"
+
+    def test_critique_subscription_fallback(self):
+        assert resolved_critique_fallback() == "anthropic/claude-opus-4-8"
 
     def test_judge_subscription_fallback(self):
         assert resolved_judge_fallback() == "openai/gpt-5.6-sol"
@@ -126,7 +135,7 @@ class TestCouncilResolution:
     def test_frontier_defaults_preserve_generalist_diversity(self):
         assert [entry.model for entry in resolved_council()] == [
             "openai/gpt-5.6-sol",
-            "anthropic/claude-fable-5",
+            "anthropic/claude-opus-4-8",
             "x-ai/grok-4.5",
             "moonshotai/kimi-k2.6",
             "z-ai/glm-5.2",

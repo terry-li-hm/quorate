@@ -26,15 +26,15 @@ The six council debaters (`resolved_council()` in `config.py`):
 | Model | Provider (native → fallback) |
 |-------|------------------------------|
 | GPT-5.6 Sol | OpenAI Codex CLI → OpenAI API → OpenRouter |
-| Claude Fable 5 | Claude CLI → Anthropic API → OpenRouter |
+| Claude Opus 4.8 | Claude CLI → Anthropic API → OpenRouter |
 | Grok 4.5 | xAI API → OpenRouter |
 | Kimi K2.6 | OpenRouter (Moonshot) |
 | GLM-5.2 | ZhiPu API → OpenRouter |
 | MiMo v2.5 Pro | OpenRouter (Xiaomi) |
 
-Judge: Gemini 3.5 Flash (Gemini CLI → Google AI Studio → OpenRouter), with GPT-5.6 Sol through the Codex subscription as the cross-vendor fallback. Critic: Claude Opus 4.8.
+Judge: Claude Fable 5 (Claude CLI → Anthropic API → OpenRouter), with GPT-5.6 Sol through the Codex subscription as the cross-vendor fallback. Critic: Gemini 3.5 Flash (Gemini CLI → Google AI Studio → OpenRouter), with Claude Opus 4.8 as its fallback.
 
-Any seat is overridable via `CONSILIUM_MODEL_M1`…`M6`, `CONSILIUM_MODEL_JUDGE`, and `CONSILIUM_MODEL_CRITIQUE`.
+Any seat is overridable via `CONSILIUM_MODEL_M1`…`M6`, `CONSILIUM_MODEL_JUDGE`, `CONSILIUM_MODEL_JUDGE_FALLBACK`, `CONSILIUM_MODEL_CRITIQUE`, and `CONSILIUM_MODEL_CRITIQUE_FALLBACK`.
 
 ## Usage
 
@@ -126,7 +126,8 @@ Scripted runs require a strict majority of configured seats. Quick mode therefor
 
 ## Roster review policy
 
-`quorate benchmark` runs three fixed synthetic canaries for route availability,
+`quorate benchmark` runs three fixed synthetic canaries across every primary production role,
+including the critic, for route availability,
 strict structured output, and simple deterministic reasoning. It stores no response
 text. Dated snapshots under `~/.local/state/quorate/benchmarks/` contain only the
 route used, latency, pass state, and safe diagnostics.
@@ -150,8 +151,8 @@ and stays silent when the roster is healthy. The corresponding LaunchAgent runs 
 **Council mode**:
 1. **Blind phase** — all models stake positions independently (prevents anchoring)
 2. **Debate** — sequential rounds with a rotating challenger who must dissent
-3. **Judge** — Gemini synthesizes competing arguments into a recommendation
-4. **Critique** — Claude reviews the judge's synthesis for blind spots
+3. **Judge** — Claude Fable synthesizes competing arguments into a recommendation
+4. **Critique** — Gemini reviews the judge's synthesis for blind spots
 
 **Presets** (redteam, premortem, oxford, discuss) are council with preset system prompts and flags. No separate code paths.
 

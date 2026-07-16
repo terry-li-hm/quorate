@@ -70,9 +70,10 @@ ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 
 # Default models
-JUDGE_MODEL = "google/gemini-3.5-flash"
+JUDGE_MODEL = "anthropic/claude-fable-5"
 JUDGE_FALLBACK_MODEL = "openai/gpt-5.6-sol"
-CRITIQUE_MODEL = "anthropic/claude-opus-4-8"
+CRITIQUE_MODEL = "google/gemini-3.5-flash"
+CRITIQUE_FALLBACK_MODEL = "anthropic/claude-opus-4-8"
 CLASSIFIER_MODEL = "anthropic/claude-opus-4-8"
 XAI_DEFAULT_MODEL = "grok-4.5"
 
@@ -99,7 +100,7 @@ def _normalize_model(value: str) -> str:
 def resolved_council() -> list[ModelEntry]:
     """Resolve council models at runtime with env overrides."""
     model_1 = _env("CONSILIUM_MODEL_M1") or "openai/gpt-5.6-sol"
-    model_2 = _env("CONSILIUM_MODEL_M2") or "anthropic/claude-fable-5"
+    model_2 = _env("CONSILIUM_MODEL_M2") or "anthropic/claude-opus-4-8"
     model_3 = _env("CONSILIUM_MODEL_M3") or "x-ai/grok-4.5"
     model_4 = _env("CONSILIUM_MODEL_M4") or "moonshotai/kimi-k2.6"
     model_5 = _env("CONSILIUM_MODEL_M5") or "z-ai/glm-5.2"
@@ -132,11 +133,24 @@ def resolved_critique(cli_override: str | None = None) -> str:
     return _normalize_model(_env("CONSILIUM_MODEL_CRITIQUE") or CRITIQUE_MODEL)
 
 
+def resolved_critique_fallback() -> str:
+    return _normalize_model(_env("CONSILIUM_MODEL_CRITIQUE_FALLBACK") or CRITIQUE_FALLBACK_MODEL)
+
+
 def quick_models() -> list[ModelEntry]:
     judge = resolved_judge()
     judge_label = _display_name(judge)
     models: list[ModelEntry] = [ModelEntry(judge_label, judge, None)]
     models.extend(entry for entry in resolved_council() if entry.model != judge)
+    return models
+
+
+def benchmark_models() -> list[ModelEntry]:
+    """Return every primary production role once for route canaries."""
+    models = quick_models()
+    critique = resolved_critique()
+    if all(entry.model != critique for entry in models):
+        models.append(ModelEntry(_display_name(critique), critique, None))
     return models
 
 

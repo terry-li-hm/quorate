@@ -12,7 +12,7 @@ from statistics import mean
 from typing import Any, Callable, Sequence
 
 from quorate.api import run_parallel
-from quorate.config import Message, ModelCallResult, ModelEntry, ReasoningEffort, quick_models
+from quorate.config import Message, ModelCallResult, ModelEntry, ReasoningEffort, benchmark_models
 
 SUITE_VERSION = "2026-07-16"
 
@@ -141,7 +141,7 @@ async def run_benchmark(
     The report deliberately excludes model response text. It records only route,
     latency, deterministic pass state, and safe diagnostics.
     """
-    resolved_models = models or quick_models()
+    resolved_models = models or benchmark_models()
     attempts: list[dict[str, Any]] = []
     canary_summaries: list[dict[str, Any]] = []
     quorum_target = max(2, len(resolved_models) // 2 + 1)
