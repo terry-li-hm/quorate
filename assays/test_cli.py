@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from quorate import cli
 from quorate.cli import _emit_result, _resolve_context, _resolve_question
 
 
@@ -77,3 +78,52 @@ def test_emit_result_marks_missing_quorum_as_error(capsys):
     assert '"ok": false' in envelope
     assert '"result"' in envelope
     assert '"quorum_achieved": false' in envelope
+
+
+def test_emit_result_marks_failed_phase_as_error(capsys):
+    result = {"error": "Brainstorm curation failed", "quorum_achieved": True}
+
+    with pytest.raises(SystemExit):
+        _emit_result("quorate brainstorm", result, json_output=True)
+
+    envelope = capsys.readouterr().out
+    assert '"ok": false' in envelope
+    assert "Brainstorm curation failed" in envelope
+
+
+def test_auto_routes_brainstorm_without_council_flags(monkeypatch):
+    async def fake_classify(_question):
+        return "brainstorm"
+
+    calls = []
+
+    def fake_brainstorm(**kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(cli, "_classify", fake_classify)
+    monkeypatch.setattr(cli, "brainstorm", fake_brainstorm)
+    cli.auto("Invent a new archive", context=("public context",), json_output=True)
+
+    assert calls == [
+        {
+            "question": "Invent a new archive",
+            "context": ("public context",),
+            "json_output": True,
+        }
+    ]
+
+
+def test_auto_routes_quick_without_deep_argument(monkeypatch):
+    async def fake_classify(_question):
+        return "quick"
+
+    calls = []
+
+    def fake_quick(**kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(cli, "_classify", fake_classify)
+    monkeypatch.setattr(cli, "quick", fake_quick)
+    cli.auto("Compare two tools", deep=True, json_output=True)
+
+    assert "deep" not in calls[0]

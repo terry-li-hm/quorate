@@ -16,6 +16,7 @@ scripts/install-local.sh
 - `src/quorate/api.py` — HTTP clients (native provider first, OpenRouter fallback), parallel queries
 - `src/quorate/prompts.py` — all prompt templates
 - `src/quorate/modes/quick.py` — parallel queries, no debate
+- `src/quorate/modes/brainstorm.py` — independent lenses → cross-pollination → curation
 - `src/quorate/modes/council.py` — blind → debate → judge → critique
 - `src/quorate/benchmark.py` — fixed synthetic roster canaries and dated health snapshots
 - `src/quorate/cli.py` — cyclopts subcommand CLI with preset system
@@ -29,9 +30,10 @@ scripts/install-local.sh
 - **ZhiPu native** — direct API at `open.bigmodel.cn/api/coding/paas/v4` (coding plan, zero marginal-cost GLM-5.2)
 - **API keys via `op run`:** effector wrapper injects keys from `quorate.env.op` at startup — no 1Password code in Python
 - **Executable split:** `~/.local/bin/quorate` links to the effector; the effector calls `quorate-core` after injecting keys, preventing both credential bypass and wrapper recursion
+- **Brainstorm:** council families plus Gemini and MiniMax generate independently; Fable curates
 - **Presets:** redteam/premortem/oxford/discuss are thin wrappers over council with preset context prompts
 
-## Models (8 production roles)
+## Models (9 production roles)
 
 | Model | Provider | Display Name |
 |-------|----------|-------------|
@@ -43,13 +45,15 @@ scripts/install-local.sh
 | moonshotai/kimi-k2.6 | OpenRouter | Kimi-K2.6 |
 | z-ai/glm-5.2 | ZhiPu native | GLM-5.2 |
 | deepseek/deepseek-v4-pro | OpenRouter | DeepSeek-V4-Pro |
+| minimax/minimax-m3 | OpenRouter | MiniMax-M3 |
 
 Council seat: Claude Opus 4.8. Judge: Claude Fable 5, with GPT-5.6 Sol through Codex as the fallback. Critic: Gemini 3.5 Flash, with Claude Opus 4.8 as the fallback.
 
 ## Runtime expectations
 
 - `quorate quick` — 7 parallel queries; subscription routes get 120 seconds before fallback
-- `quorate benchmark` — 3 sequential synthetic canaries across all 8 primary production roles
+- `quorate brainstorm` — 8 parallel generators, 8 parallel hybrids, then Fable curation
+- `quorate benchmark` — 3 sequential synthetic canaries across all 9 primary production roles
 - `quorate council --fast` — blind + judge only, skips debate + critic, **~2-3 min** (judge with HIGH reasoning effort dominates)
 - `quorate council` — full 4-phase deliberation, **5-8 min** (default), **12-15 min** with `--deep`
 

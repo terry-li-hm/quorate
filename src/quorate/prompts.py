@@ -182,6 +182,7 @@ CLASSIFIER_PROMPT = """Pick the best deliberation mode for this question. Respon
 
 quick: Factual questions, straightforward comparisons — just need parallel opinions
 council: Complex trade-offs, multi-stakeholder, strategic decisions
+brainstorm: Generate many distinct ideas, concepts, possibilities, names, or opportunities
 oxford: Binary decisions with clear for/against — "should I X or Y?"
 redteam: Stress-testing a plan — "what could go wrong with X?"
 discuss: Open-ended exploration, no clear decision needed

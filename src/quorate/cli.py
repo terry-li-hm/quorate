@@ -106,6 +106,20 @@ _tree.add_command(
     annotations={"readonly": True},
 )
 _tree.add_command(
+    "brainstorm",
+    description="Divergent ideation — independent lenses, cross-pollination, curated shortlist",
+    params=[
+        {"name": "question", "type": "string", "required": True},
+        {
+            "name": "--context",
+            "type": "string",
+            "description": "Non-sensitive context file(s) or text; repeatable",
+        },
+        {"name": "--json", "type": "boolean", "default": False},
+    ],
+    annotations={"readonly": True},
+)
+_tree.add_command(
     "redteam",
     description="Adversarial stress-test — find what breaks",
     params=[
@@ -311,6 +325,16 @@ def _emit_result(command: str, result: str | dict | None, json_output: bool) -> 
             fix="Check model availability with: quorate quick 'test'",
         )
         return
+    if isinstance(result, dict) and result.get("error"):
+        envelope = err(
+            command,
+            str(result["error"]),
+            EXIT_ERROR,
+            fix="Inspect the failed phase and its sanitized route diagnostics.",
+        )
+        envelope["result"] = result
+        print(json.dumps(envelope, ensure_ascii=False))
+        raise SystemExit(EXIT_ERROR)
     if isinstance(result, dict) and result.get("quorum_achieved") is False:
         success_count = result.get("success_count", 0)
         quorum_target = result.get("quorum_target", 0)
@@ -400,10 +424,16 @@ def auto(
     if not json_output:
         Console().print(f"[dim]→ {mode}[/dim]\n")
     ctx_tuple = (resolved_ctx,) if resolved_ctx else ()
-    handler = {"quick": quick, "council": council, "redteam": _preset_cmd("redteam")}.get(
-        mode, council
-    )
-    handler(question=text, context=ctx_tuple, deep=deep, json_output=json_output)
+    if mode == "brainstorm":
+        brainstorm(question=text, context=ctx_tuple, json_output=json_output)
+        return
+    if mode in PRESETS:
+        _preset_cmd(mode)(question=text, context=resolved_ctx, json_output=json_output)
+        return
+    if mode == "quick":
+        quick(question=text, context=ctx_tuple, json_output=json_output)
+        return
+    council(question=text, context=ctx_tuple, deep=deep, json_output=json_output)
 
 
 @app.command
@@ -469,6 +499,31 @@ def benchmark(
         if report.get("snapshot_path"):
             console.print(f"[dim]Snapshot: {report['snapshot_path']}[/dim]")
     _emit_result("quorate benchmark", report, json_output)
+
+
+@app.command
+def brainstorm(
+    question: str | None = None,
+    *,
+    context: tuple[str, ...] = (),
+    json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
+) -> None:
+    """Generate independently, cross-pollinate once, then curate a shortlist."""
+    json_output = json_output or _is_agent()
+    from quorate.modes.brainstorm import run_brainstorm
+
+    text = _resolve_question(question)
+    resolved_ctx = _resolve_context(context)
+    console = Console(quiet=json_output)
+    result = asyncio.run(
+        run_brainstorm(
+            text,
+            context=resolved_ctx,
+            console=console,
+            json_output=json_output,
+        )
+    )
+    _emit_result("quorate brainstorm", result, json_output)
 
 
 @app.command
@@ -582,5 +637,5 @@ async def _classify(question: str) -> str:
     messages = [Message.system(CLASSIFIER_PROMPT), Message.user(question)]
     response = await query_judge(CLASSIFIER_MODEL, messages, max_tokens=10, timeout=15)
     result = response.strip().lower().rstrip(".")
-    valid = {"quick", "council", "redteam"}
+    valid = {"quick", "council", "brainstorm", "redteam", "oxford", "discuss"}
     return result if result in valid else "council"

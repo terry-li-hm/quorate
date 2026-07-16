@@ -76,6 +76,10 @@ CRITIQUE_MODEL = "google/gemini-3.5-flash"
 CRITIQUE_FALLBACK_MODEL = "anthropic/claude-opus-4-8"
 CLASSIFIER_MODEL = "anthropic/claude-opus-4-8"
 XAI_DEFAULT_MODEL = "grok-4.5"
+BRAINSTORM_EXTRA_MODELS = (
+    "google/gemini-3.5-flash",
+    "minimax/minimax-m3",
+)
 
 
 def _env(var: str) -> str | None:
@@ -145,12 +149,26 @@ def quick_models() -> list[ModelEntry]:
     return models
 
 
+def brainstorm_models() -> list[ModelEntry]:
+    """Return the council plus two ideation-only model families."""
+    models = list(resolved_council())
+    configured = (
+        _env("CONSILIUM_BRAINSTORM_MODEL_1") or BRAINSTORM_EXTRA_MODELS[0],
+        _env("CONSILIUM_BRAINSTORM_MODEL_2") or BRAINSTORM_EXTRA_MODELS[1],
+    )
+    for model in configured:
+        if all(entry.model != model for entry in models):
+            models.append(ModelEntry(_display_name(model), model))
+    return models
+
+
 def benchmark_models() -> list[ModelEntry]:
     """Return every primary production role once for route canaries."""
     models = quick_models()
-    critique = resolved_critique()
-    if all(entry.model != critique for entry in models):
-        models.append(ModelEntry(_display_name(critique), critique, None))
+    production_models = [resolved_critique(), *(entry.model for entry in brainstorm_models())]
+    for model in production_models:
+        if all(entry.model != model for entry in models):
+            models.append(ModelEntry(_display_name(model), model, None))
     return models
 
 
@@ -173,6 +191,8 @@ def _display_name(model_id: str) -> str:
                 result.append("Kimi")
             case "mimo":
                 result.append("MiMo")
+            case "minimax":
+                result.append("MiniMax")
             case _:
                 result.append(part[0].upper() + part[1:])
     return "-".join(result)
@@ -210,6 +230,7 @@ THINKING_MODELS = {
     "glm-5.1",
     "kimi-k2.6",
     "mimo-v2.5-pro",
+    "minimax-m3",
 }
 
 

@@ -34,6 +34,8 @@ The six council debaters (`resolved_council()` in `config.py`):
 
 Judge: Claude Fable 5 (Claude CLI → Anthropic API → OpenRouter), with GPT-5.6 Sol through the Codex subscription as the cross-vendor fallback. Critic: Gemini 3.5 Flash (Antigravity CLI → Google AI Studio → OpenRouter), with Claude Opus 4.8 as its fallback.
 
+Brainstorm mode uses the six council families plus Gemini 3.5 Flash and MiniMax M3. Claude Fable curates the resulting ideas but does not generate them.
+
 Any seat is overridable via `CONSILIUM_MODEL_M1`…`M6`, `CONSILIUM_MODEL_JUDGE`, `CONSILIUM_MODEL_JUDGE_FALLBACK`, `CONSILIUM_MODEL_CRITIQUE`, and `CONSILIUM_MODEL_CRITIQUE_FALLBACK`.
 
 ## Usage
@@ -44,6 +46,9 @@ quorate quick "What makes a good CLI?"
 
 # Full deliberation — blind phase, debate, judge, critique
 quorate council "Should we rewrite our backend in Rust?"
+
+# Divergent ideation — eight lenses, cross-pollination, curated shortlist
+quorate brainstorm "Ideas for a calmer personal knowledge archive"
 
 # Adversarial stress-test
 quorate redteam "Our launch plan for Q3"
@@ -85,7 +90,8 @@ model then debates in that principal's first-person voice. `--context` is repeat
 is read as a file if it exists, else treated as inline text. There is no `--rounds`, `--no-critic`,
 or `--domain` flag: use `--fast`/`--deep` for round count, and put regulatory framing in the
 question or a `--context` file. The presets (`redteam`, `premortem`, `oxford`, `discuss`) accept
-only `--context` and `--json`; `--persona` is `council`/`quick` only.
+only `--context` and `--json`; `brainstorm` also accepts those two flags, while `--persona`
+is `council`/`quick` only.
 
 ## Data boundary
 
@@ -122,7 +128,7 @@ export QUORATE_OPENROUTER_KEY="..."   # Dedicated OpenRouter key (takes priority
 
 GPT-5.6 Sol uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, and Gemini uses Antigravity (`agy --print`) — all route through their respective subscriptions at zero marginal cost, falling back to the direct API and then OpenRouter. Telemetry records the model and route actually used, and subscription-backed calls are not priced as API usage.
 
-Scripted runs require a strict majority of configured seats. Quick mode therefore needs four of seven successful responses, while council needs four of six in its blind phase. A degraded run returns a non-zero JSON error envelope containing the partial responses and safe route diagnostics such as `http_404`, `timeout`, or `no_credentials`; provider prose and secrets are never copied into diagnostics.
+Scripted runs require a strict majority of configured seats. Quick mode therefore needs four of seven successful responses, council needs four of six in its blind phase, and brainstorm needs five of eight independent generators. A degraded run returns a non-zero JSON error envelope containing the partial responses and safe route diagnostics such as `http_404`, `timeout`, or `no_credentials`; provider prose and secrets are never copied into diagnostics.
 
 ## Roster review policy
 
@@ -142,7 +148,9 @@ Material role changes also receive a durable experiment note. See the
 [2026-07-16 judge role selection](docs/experiments/2026-07-16-judge-role-selection.md)
 for the evidence behind the Fable judge architecture and the
 [2026-07-16 DeepSeek seat selection](docs/experiments/2026-07-16-deepseek-seat-selection.md)
-for the evidence behind the sixth council seat.
+for the evidence behind the sixth council seat, and the
+[2026-07-16 brainstorm mode validation](docs/experiments/2026-07-16-brainstorm-mode.md)
+for the divergent ideation architecture.
 
 On the Vivesca host, `scripts/monthly-benchmark.sh` is the non-interactive runner.
 It loads the locally resolved credential environment, uses subscription routes first,
@@ -153,6 +161,8 @@ and stays silent when the roster is healthy. The corresponding LaunchAgent runs 
 ## How it works
 
 **Quick mode**: Fan out the question to all models in parallel. Collect and display.
+
+**Brainstorm mode**: Eight model families generate through distinct lenses without seeing one another, cross-pollinate once with a neighboring model, then Claude Fable clusters duplicates and returns six ideas plus one wildcard.
 
 **Council mode**:
 1. **Blind phase** — all models stake positions independently (prevents anchoring)

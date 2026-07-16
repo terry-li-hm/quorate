@@ -5,6 +5,7 @@ from quorate.config import (
     ReasoningEffort,
     _display_name,
     benchmark_models,
+    brainstorm_models,
     is_error,
     is_thinking_model,
     model_max_tokens,
@@ -26,6 +27,9 @@ class TestDisplayName:
 
     def test_deepseek(self):
         assert _display_name("deepseek/deepseek-v3.2") == "DeepSeek-V3.2"
+
+    def test_minimax(self):
+        assert _display_name("minimax/minimax-m3") == "MiniMax-M3"
 
     def test_gemini_stable(self):
         assert _display_name("google/gemini-3.5-flash") == "Gemini-3.5-Flash"
@@ -49,6 +53,9 @@ class TestIsThinkingModel:
 
     def test_deepseek_v4_pro(self):
         assert is_thinking_model("deepseek/deepseek-v4-pro") is True
+
+    def test_minimax_m3(self):
+        assert is_thinking_model("minimax/minimax-m3") is True
 
     def test_non_thinking(self):
         assert is_thinking_model("anthropic/claude-haiku-4-5") is False
@@ -116,8 +123,16 @@ class TestCouncilResolution:
         assert len(quick_models()) == 7
 
     def test_benchmark_covers_critic_route(self):
-        assert len(benchmark_models()) == 8
-        assert benchmark_models()[-1].model == "google/gemini-3.5-flash"
+        assert len(benchmark_models()) == 9
+        assert benchmark_models()[-2].model == "google/gemini-3.5-flash"
+        assert benchmark_models()[-1].model == "minimax/minimax-m3"
+
+    def test_brainstorm_adds_google_and_minimax_without_changing_council(self):
+        assert [entry.model for entry in brainstorm_models()][-2:] == [
+            "google/gemini-3.5-flash",
+            "minimax/minimax-m3",
+        ]
+        assert len(brainstorm_models()) == 8
 
     def test_judge_default(self):
         assert resolved_judge() == "anthropic/claude-fable-5"

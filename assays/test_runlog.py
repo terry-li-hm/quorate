@@ -47,6 +47,9 @@ class TestPriceLookup:
     def test_zhipu_glm51_free(self):
         assert runlog.price_for("glm-5.1") == (0.0, 0.0)
 
+    def test_minimax_m3(self):
+        assert runlog.price_for("minimax/minimax-m3") == (0.30, 1.20)
+
 
 class TestEstimateCost:
     def test_grok43_basic(self):
