@@ -42,7 +42,7 @@ scripts/install-local.sh
 | x-ai/grok-4.5 | xAI native | Grok-4.5 |
 | moonshotai/kimi-k2.6 | OpenRouter | Kimi-K2.6 |
 | z-ai/glm-5.2 | ZhiPu native | GLM-5.2 |
-| xiaomi/mimo-v2.5-pro | OpenRouter | MiMo-V2.5-Pro |
+| deepseek/deepseek-v4-pro | OpenRouter | DeepSeek-V4-Pro |
 
 Council seat: Claude Opus 4.8. Judge: Claude Fable 5, with GPT-5.6 Sol through Codex as the fallback. Critic: Gemini 3.5 Flash, with Claude Opus 4.8 as the fallback.
 

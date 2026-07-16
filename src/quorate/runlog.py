@@ -33,6 +33,7 @@ PRICES: dict[str, tuple[float, float]] = {
     "glm-5.2": (0.9576, 3.0096),
     "glm-5.1": (0.0, 0.0),
     "mimo-v2.5-pro": (0.435, 0.87),
+    "deepseek-v4-pro": (0.435, 0.87),
 }
 
 ZERO_MARGINAL_COST_PROVIDERS = {

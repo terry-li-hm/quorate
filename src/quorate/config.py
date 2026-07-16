@@ -104,7 +104,7 @@ def resolved_council() -> list[ModelEntry]:
     model_3 = _env("CONSILIUM_MODEL_M3") or "x-ai/grok-4.5"
     model_4 = _env("CONSILIUM_MODEL_M4") or "moonshotai/kimi-k2.6"
     model_5 = _env("CONSILIUM_MODEL_M5") or "z-ai/glm-5.2"
-    model_6 = _env("CONSILIUM_MODEL_M6") or "xiaomi/mimo-v2.5-pro"
+    model_6 = _env("CONSILIUM_MODEL_M6") or "deepseek/deepseek-v4-pro"
     xai_model = _env("CONSILIUM_XAI_MODEL") or XAI_DEFAULT_MODEL
 
     return [
@@ -204,6 +204,7 @@ THINKING_MODELS = {
     "grok-4.5",
     "grok-4.3",
     "deepseek-r1",
+    "deepseek-v4-pro",
     "glm-5",
     "glm-5.2",
     "glm-5.1",

@@ -47,6 +47,9 @@ class TestIsThinkingModel:
     def test_glm_51(self):
         assert is_thinking_model("z-ai/glm-5.1") is True
 
+    def test_deepseek_v4_pro(self):
+        assert is_thinking_model("deepseek/deepseek-v4-pro") is True
+
     def test_non_thinking(self):
         assert is_thinking_model("anthropic/claude-haiku-4-5") is False
 
@@ -139,5 +142,5 @@ class TestCouncilResolution:
             "x-ai/grok-4.5",
             "moonshotai/kimi-k2.6",
             "z-ai/glm-5.2",
-            "xiaomi/mimo-v2.5-pro",
+            "deepseek/deepseek-v4-pro",
         ]

@@ -30,7 +30,7 @@ The six council debaters (`resolved_council()` in `config.py`):
 | Grok 4.5 | xAI API → OpenRouter |
 | Kimi K2.6 | OpenRouter (Moonshot) |
 | GLM-5.2 | ZhiPu API → OpenRouter |
-| MiMo v2.5 Pro | OpenRouter (Xiaomi) |
+| DeepSeek V4 Pro | OpenRouter (DeepSeek) |
 
 Judge: Claude Fable 5 (Claude CLI → Anthropic API → OpenRouter), with GPT-5.6 Sol through the Codex subscription as the cross-vendor fallback. Critic: Gemini 3.5 Flash (Antigravity CLI → Google AI Studio → OpenRouter), with Claude Opus 4.8 as its fallback.
 
@@ -116,7 +116,7 @@ export XAI_API_KEY="..."              # Grok (xAI)
 export ZHIPU_API_KEY="..."            # GLM (ZhiPu native)
 export ANTHROPIC_API_KEY="..."        # Claude (fallback if no claude CLI)
 export OPENAI_API_KEY="..."           # GPT (fallback if no Codex CLI)
-export OPENROUTER_API_KEY="..."       # Kimi, MiMo, and fallback for all
+export OPENROUTER_API_KEY="..."       # Kimi, DeepSeek, and fallback for all
 export QUORATE_OPENROUTER_KEY="..."   # Dedicated OpenRouter key (takes priority)
 ```
 
@@ -140,7 +140,9 @@ has a strict-majority quorum. Quorate never edits its own roster from benchmark 
 
 Material role changes also receive a durable experiment note. See the
 [2026-07-16 judge role selection](docs/experiments/2026-07-16-judge-role-selection.md)
-for the evidence behind the Fable judge architecture.
+for the evidence behind the Fable judge architecture and the
+[2026-07-16 DeepSeek seat selection](docs/experiments/2026-07-16-deepseek-seat-selection.md)
+for the evidence behind the sixth council seat.
 
 On the Vivesca host, `scripts/monthly-benchmark.sh` is the non-interactive runner.
 It loads the locally resolved credential environment, uses subscription routes first,
