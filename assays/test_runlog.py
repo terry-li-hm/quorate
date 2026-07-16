@@ -66,7 +66,9 @@ class TestEstimateCost:
         r = _result(model_id="fake-model", tokens_in=1000, tokens_out=1000)
         assert runlog.estimate_cost(r) == 0.0
 
-    @pytest.mark.parametrize("provider", ["codex-exec", "claude-print", "gemini-cli"])
+    @pytest.mark.parametrize(
+        "provider", ["codex-exec", "claude-print", "antigravity-cli", "gemini-cli"]
+    )
     def test_subscription_routes_have_zero_marginal_cost(self, provider):
         r = _result(
             model_id="claude-fable-5",

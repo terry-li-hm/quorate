@@ -1,7 +1,13 @@
 """Tests for quorate.api — strip_think, provider detection, error handling."""
 
-from quorate.api import _detect_provider, _diagnostic_code, _strip_think, quorum_health
-from quorate.config import ModelCallResult
+from quorate.api import (
+    _antigravity_model,
+    _detect_provider,
+    _diagnostic_code,
+    _strip_think,
+    quorum_health,
+)
+from quorate.config import ModelCallResult, ReasoningEffort
 
 
 class TestStripThink:
@@ -45,6 +51,29 @@ class TestDetectProvider:
 
     def test_qwen_openrouter(self):
         assert _detect_provider("qwen/qwen3.6-plus") == "openrouter"
+
+
+class TestAntigravityModel:
+    def test_flash_defaults_to_medium(self):
+        assert _antigravity_model("google/gemini-3.5-flash", None) == "Gemini 3.5 Flash (Medium)"
+
+    def test_flash_high(self):
+        assert (
+            _antigravity_model("google/gemini-3.5-flash", ReasoningEffort.HIGH)
+            == "Gemini 3.5 Flash (High)"
+        )
+
+    def test_pro_medium_uses_high(self):
+        assert (
+            _antigravity_model("google/gemini-3.1-pro", ReasoningEffort.MEDIUM)
+            == "Gemini 3.1 Pro (High)"
+        )
+
+    def test_pro_low(self):
+        assert (
+            _antigravity_model("google/gemini-3.1-pro-preview", ReasoningEffort.LOW)
+            == "Gemini 3.1 Pro (Low)"
+        )
 
 
 class TestSafeDiagnostics:

@@ -32,7 +32,7 @@ The six council debaters (`resolved_council()` in `config.py`):
 | GLM-5.2 | ZhiPu API → OpenRouter |
 | MiMo v2.5 Pro | OpenRouter (Xiaomi) |
 
-Judge: Claude Fable 5 (Claude CLI → Anthropic API → OpenRouter), with GPT-5.6 Sol through the Codex subscription as the cross-vendor fallback. Critic: Gemini 3.5 Flash (Gemini CLI → Google AI Studio → OpenRouter), with Claude Opus 4.8 as its fallback.
+Judge: Claude Fable 5 (Claude CLI → Anthropic API → OpenRouter), with GPT-5.6 Sol through the Codex subscription as the cross-vendor fallback. Critic: Gemini 3.5 Flash (Antigravity CLI → Google AI Studio → OpenRouter), with Claude Opus 4.8 as its fallback.
 
 Any seat is overridable via `CONSILIUM_MODEL_M1`…`M6`, `CONSILIUM_MODEL_JUDGE`, `CONSILIUM_MODEL_JUDGE_FALLBACK`, `CONSILIUM_MODEL_CRITIQUE`, and `CONSILIUM_MODEL_CRITIQUE_FALLBACK`.
 
@@ -120,7 +120,7 @@ export OPENROUTER_API_KEY="..."       # Kimi, MiMo, and fallback for all
 export QUORATE_OPENROUTER_KEY="..."   # Dedicated OpenRouter key (takes priority)
 ```
 
-GPT-5.6 Sol uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, and Gemini uses the Gemini CLI (`gemini -p`) — all route through their respective subscriptions at zero marginal cost, falling back to the direct API and then OpenRouter. Telemetry records the model and route actually used, and subscription-backed calls are not priced as API usage.
+GPT-5.6 Sol uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, and Gemini uses Antigravity (`agy --print`) — all route through their respective subscriptions at zero marginal cost, falling back to the direct API and then OpenRouter. Telemetry records the model and route actually used, and subscription-backed calls are not priced as API usage.
 
 Scripted runs require a strict majority of configured seats. Quick mode therefore needs four of seven successful responses, while council needs four of six in its blind phase. A degraded run returns a non-zero JSON error envelope containing the partial responses and safe route diagnostics such as `http_404`, `timeout`, or `no_credentials`; provider prose and secrets are never copied into diagnostics.
 

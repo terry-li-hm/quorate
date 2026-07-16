@@ -35,7 +35,13 @@ PRICES: dict[str, tuple[float, float]] = {
     "mimo-v2.5-pro": (0.435, 0.87),
 }
 
-ZERO_MARGINAL_COST_PROVIDERS = {"codex-exec", "claude-print", "gemini-cli", "zhipu-native"}
+ZERO_MARGINAL_COST_PROVIDERS = {
+    "antigravity-cli",
+    "claude-print",
+    "codex-exec",
+    "gemini-cli",  # Historical run records.
+    "zhipu-native",
+}
 
 
 def price_for(model_id: str) -> tuple[float, float]:

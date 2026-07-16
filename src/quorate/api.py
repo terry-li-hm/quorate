@@ -407,9 +407,24 @@ async def _claude_print(
     return _strip_think(result), tokens
 
 
-async def _gemini_prompt(model: str, messages: list[Message], timeout: float) -> ProviderResult:
-    """Query Gemini CLI -p mode (Gemini subscription, $0)."""
+def _antigravity_model(model: str, effort: ReasoningEffort | None) -> str:
+    """Map a Quorate Google model to an Antigravity model label."""
     bare = model.removeprefix("google/")
+    level = (effort or ReasoningEffort.MEDIUM).value.title()
+    if "gemini-3.1-pro" in bare:
+        level = "Low" if level == "Low" else "High"
+        return f"Gemini 3.1 Pro ({level})"
+    return f"Gemini 3.5 Flash ({level})"
+
+
+async def _antigravity_prompt(
+    model: str,
+    messages: list[Message],
+    timeout: float,
+    effort: ReasoningEffort | None,
+) -> ProviderResult:
+    """Query Gemini through the Antigravity subscription CLI."""
+    label = _antigravity_model(model, effort)
     sections = []
     for msg in messages:
         text = msg.content.strip()
@@ -418,29 +433,21 @@ async def _gemini_prompt(model: str, messages: list[Message], timeout: float) ->
         sections.append(f"Previous response:\n{text}" if msg.role == "assistant" else text)
     prompt = "\n\n".join(sections)
     if not prompt:
-        return f"[Error: Empty prompt for gemini {bare}]", None
+        return f"[Error: Empty prompt for Antigravity {label}]", None
     proc = None
-    # Strip API keys so Gemini CLI uses the existing subscription login. Its JSON parser
-    # tolerates any hook preamble from the standard user config.
-    env = {
-        key: value
-        for key, value in os.environ.items()
-        if key not in {"GOOGLE_API_KEY", "GEMINI_API_KEY"}
-    }
-    env.pop("GEMINI_HOME", None)
     try:
         proc = await asyncio.wait_for(
             asyncio.create_subprocess_exec(
-                "gemini",
-                "-p",
+                "agy",
+                "--print",
                 prompt,
-                "-m",
-                bare,
-                "-o",
-                "json",
+                "--sandbox",
+                "--mode",
+                "plan",
+                "--model",
+                label,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env=env,
             ),
             timeout=timeout,
         )
@@ -448,32 +455,17 @@ async def _gemini_prompt(model: str, messages: list[Message], timeout: float) ->
     except (asyncio.TimeoutError, FileNotFoundError) as exc:
         if proc is not None:
             proc.kill()
-        return f"[Error: gemini -p {bare}: {exc}]", None
+        return f"[Error: agy --print {label}: {exc}]", None
     if proc.returncode != 0:
         detail = (stderr or b"").decode().strip() or f"exit {proc.returncode}"
         return (
-            f"[Error: gemini -p {bare}: {detail}]",
+            f"[Error: agy --print {label}: {detail}]",
             None,
         )
-    raw = stdout.decode()
-    # Gemini hooks may prepend text before JSON — scan for first '{'
-    json_start = raw.find("{")
-    try:
-        data = json.loads(raw[json_start:]) if json_start >= 0 else json.loads(raw)
-    except (json.JSONDecodeError, ValueError):
-        result = raw.strip()
-        return (result if result else f"[No response from gemini {bare}]"), None
-    result = (data.get("response") or "").strip()
+    result = stdout.decode().strip()
     if not result:
-        return f"[No response from gemini {bare}]", None
-    stats = data.get("stats", {}).get("models", {})
-    tokens = None
-    for _model_name, model_stats in stats.items():
-        t = model_stats.get("tokens", {})
-        if t.get("candidates"):
-            tokens = {"tokens_in": t.get("input"), "tokens_out": t.get("candidates")}
-            break
-    return _strip_think(result), tokens
+        return f"[No response from Antigravity {label}]", None
+    return _strip_think(result), None
 
 
 async def _zhipu(
@@ -608,14 +600,15 @@ async def query_model(
             _record_missing("anthropic-api")
 
     elif provider == "google":
-        content, tokens = await _gemini_prompt(
+        content, tokens = await _antigravity_prompt(
             entry.model,
             messages,
             min(subscription_timeout, _remaining_timeout()),
+            effort,
         )
         if not is_error(content):
-            return _result(content, "gemini-cli", tokens)
-        _record_failure("gemini-cli", content)
+            return _result(content, "antigravity-cli", tokens)
+        _record_failure("antigravity-cli", content)
         google_key = keys.get("google")
         if google_key:
             content, tokens = await _google(
@@ -771,7 +764,7 @@ async def query_judge(
     provider = _detect_provider(model)
     async with httpx.AsyncClient() as client:
         if provider == "google":
-            content, _ = await _gemini_prompt(model, messages, timeout)
+            content, _ = await _antigravity_prompt(model, messages, timeout, effort)
             if not is_error(content):
                 return content
             google_key = keys.get("google")
