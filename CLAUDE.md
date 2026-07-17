@@ -42,7 +42,7 @@ scripts/install-local.sh
 | anthropic/claude-fable-5 | claude --print | Claude-Fable-5 |
 | anthropic/claude-opus-4-8 | claude --print | Claude-Opus-4-8 |
 | x-ai/grok-4.5 | xAI native | Grok-4.5 |
-| moonshotai/kimi-k2.6 | OpenRouter | Kimi-K2.6 |
+| kimi-code/k3 | Kimi Code subscription | Kimi-K3 |
 | z-ai/glm-5.2 | ZhiPu native | GLM-5.2 |
 | deepseek/deepseek-v4-pro | OpenRouter | DeepSeek-V4-Pro |
 | minimax/minimax-m3 | OpenRouter | MiniMax-M3 |
@@ -70,5 +70,5 @@ Council seat: Claude Opus 4.8. Judge: Claude Fable 5, with GPT-5.6 Sol through C
 - The standalone Gemini CLI no longer supports the individual subscription client. Google models use Antigravity in sandboxed plan mode before falling back to Google AI Studio.
 - Thinking models need longer timeouts (180s+) in parallel execution
 - Scripted quick and council runs fail closed when fewer than a strict majority respond. Their error envelope retains partial responses plus sanitized route codes, never provider error prose.
-- Benchmark snapshots never persist response text and never edit the roster. A seat change requires agreement between external task-specific evidence and local canaries.
+- Benchmark snapshots never persist response text and never edit the roster. A seat change requires external task-specific evidence, a valid role-specific assay, and healthy local canaries. Admission never transfers between roles; follow `docs/model-role-governance.md`.
 - Council runtime is dominated by sequential debate phase (~2-3 min for 6 speakers) + judge with 300s timeout — not a bug, just the design

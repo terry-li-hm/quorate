@@ -135,6 +135,10 @@ Scripted runs require a strict majority of configured seats. Quick mode therefor
 
 ## Roster review policy
 
+The [model role governance policy](docs/model-role-governance.md) defines the admission lifecycle,
+review and removal triggers, data boundary, and subscription-renewal gate. Admission is scoped to
+one role, route, and harness; a Quorate pass never approves a model for coding or autonomous work.
+
 `quorate benchmark` runs three fixed synthetic canaries across every primary production role,
 including the critic, for route availability,
 strict structured output, and simple deterministic reasoning. It stores no response
