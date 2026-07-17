@@ -4,6 +4,8 @@ from quorate.api import (
     _antigravity_model,
     _detect_provider,
     _diagnostic_code,
+    _kimi_cli_env,
+    _parse_kimi_stream,
     _strip_think,
     quorum_health,
 )
@@ -25,6 +27,9 @@ class TestStripThink:
 
 
 class TestDetectProvider:
+    def test_kimi_code(self):
+        assert _detect_provider("kimi-code/k3") == "kimi-code"
+
     def test_anthropic(self):
         assert _detect_provider("anthropic/claude-opus-4-6") == "anthropic"
 
@@ -85,6 +90,26 @@ class TestSafeDiagnostics:
 
     def test_unknown_error_is_generic(self):
         assert _diagnostic_code("[Error: sensitive provider prose]") == "provider_error"
+
+
+def test_parse_kimi_stream_excludes_metadata():
+    payload = "\n".join(
+        (
+            '{"role":"assistant","content":"answer"}',
+            '{"role":"meta","content":"resume hint"}',
+        )
+    )
+    assert _parse_kimi_stream(payload) == "answer"
+
+
+def test_kimi_cli_environment_excludes_provider_secrets(monkeypatch):
+    monkeypatch.setenv("PATH", "/bin")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "secret")
+    monkeypatch.setenv("XAI_API_KEY", "secret")
+    environment = _kimi_cli_env()
+    assert environment["PATH"] == "/bin"
+    assert "OPENROUTER_API_KEY" not in environment
+    assert "XAI_API_KEY" not in environment
 
 
 class TestQuorumHealth:

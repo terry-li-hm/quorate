@@ -28,7 +28,7 @@ The six council debaters (`resolved_council()` in `config.py`):
 | GPT-5.6 Sol | OpenAI Codex CLI → OpenAI API → OpenRouter |
 | Claude Opus 4.8 | Claude CLI → Anthropic API → OpenRouter |
 | Grok 4.5 | xAI API → OpenRouter |
-| Kimi K2.6 | OpenRouter (Moonshot) |
+| Kimi K3 | Kimi Code CLI subscription |
 | GLM-5.2 | ZhiPu API → OpenRouter |
 | DeepSeek V4 Pro | OpenRouter (DeepSeek) |
 
@@ -122,11 +122,11 @@ export XAI_API_KEY="..."              # Grok (xAI)
 export ZHIPU_API_KEY="..."            # GLM (ZhiPu native)
 export ANTHROPIC_API_KEY="..."        # Claude (fallback if no claude CLI)
 export OPENAI_API_KEY="..."           # GPT (fallback if no Codex CLI)
-export OPENROUTER_API_KEY="..."       # Kimi, DeepSeek, and fallback for all
+export OPENROUTER_API_KEY="..."       # DeepSeek and API fallback routes
 export QUORATE_OPENROUTER_KEY="..."   # Dedicated OpenRouter key (takes priority)
 ```
 
-GPT-5.6 Sol uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, and Gemini uses Antigravity (`agy --print`) — all route through their respective subscriptions at zero marginal cost, falling back to the direct API and then OpenRouter. Telemetry records the model and route actually used, and subscription-backed calls are not priced as API usage.
+GPT-5.6 Sol uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, Gemini uses Antigravity (`agy --print`), and K3 uses Kimi Code prompt mode. These routes use their respective subscriptions at zero marginal cost. GPT, Claude, and Gemini can fall back to a direct API and then OpenRouter; K3 fails closed when the subscribed CLI route is unavailable. Telemetry records the model and route actually used, and subscription-backed calls are not priced as API usage.
 
 Scripted runs require a strict majority of configured seats. Quick mode therefore needs four of seven successful responses, council needs four of six in its blind phase, and brainstorm needs five of eight independent generators. A degraded run returns a non-zero JSON error envelope containing the partial responses and safe route diagnostics such as `http_404`, `timeout`, or `no_credentials`; provider prose and secrets are never copied into diagnostics.
 
@@ -148,7 +148,9 @@ Material role changes also receive a durable experiment note. See the
 [2026-07-16 judge role selection](docs/experiments/2026-07-16-judge-role-selection.md)
 for the evidence behind the Fable judge architecture, the
 [2026-07-17 Fable versus GPT judge assay](docs/experiments/2026-07-17-fable-vs-gpt-judge-assay.md)
-for the direct retention test, and the
+for the direct retention test, the
+[2026-07-17 K3 versus K2.6 council-seat evaluation](docs/experiments/2026-07-17-k3-vs-k2.6-council-seat.md)
+for the Kimi-seat replacement, and the
 [2026-07-16 DeepSeek seat selection](docs/experiments/2026-07-16-deepseek-seat-selection.md)
 for the evidence behind the sixth council seat, and the
 [2026-07-16 brainstorm mode validation](docs/experiments/2026-07-16-brainstorm-mode.md)

@@ -155,7 +155,7 @@ class TestCouncilResolution:
             "openai/gpt-5.6-sol",
             "anthropic/claude-opus-4-8",
             "x-ai/grok-4.5",
-            "moonshotai/kimi-k2.6",
+            "kimi-code/k3",
             "z-ai/glm-5.2",
             "deepseek/deepseek-v4-pro",
         ]

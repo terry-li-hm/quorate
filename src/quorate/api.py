@@ -407,6 +407,91 @@ async def _claude_print(
     return _strip_think(result), tokens
 
 
+def _parse_kimi_stream(payload: str) -> str:
+    parts: list[str] = []
+    for line in payload.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("role") == "assistant" and isinstance(event.get("content"), str):
+            parts.append(event["content"])
+    return "\n".join(parts).strip()
+
+
+def _kimi_cli_env() -> dict[str, str]:
+    allowed = {
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "LOGNAME",
+        "NODE_EXTRA_CA_CERTS",
+        "PATH",
+        "SHELL",
+        "SSL_CERT_DIR",
+        "SSL_CERT_FILE",
+        "TMPDIR",
+        "USER",
+        "XDG_CONFIG_HOME",
+    }
+    return {key: value for key, value in os.environ.items() if key in allowed}
+
+
+async def _kimi_code_prompt(
+    model: str,
+    messages: list[Message],
+    timeout: float,
+) -> ProviderResult:
+    """Query Kimi through the subscribed Kimi Code CLI in an isolated workspace."""
+    bare = model.removeprefix("kimi-code/")
+    sections = []
+    for message in messages:
+        text = message.content.strip()
+        if not text:
+            continue
+        label = message.role.upper()
+        sections.append(f"[{label}]\n{text}")
+    prompt = "\n\n".join(sections)
+    if not prompt:
+        return f"[Error: Empty prompt for Kimi Code {bare}]", None
+    binary = Path.home() / ".kimi-code" / "bin" / "kimi"
+    proc = None
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="quorate-kimi-") as temp_dir:
+        root = Path(temp_dir)
+        skills = root / "skills"
+        skills.mkdir()
+        try:
+            proc = await asyncio.wait_for(
+                asyncio.create_subprocess_exec(
+                    str(binary),
+                    "--model",
+                    model,
+                    "--skills-dir",
+                    str(skills),
+                    "--prompt",
+                    prompt,
+                    "--output-format",
+                    "stream-json",
+                    cwd=root,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=_kimi_cli_env(),
+                ),
+                timeout=timeout,
+            )
+            stdout, _stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except (asyncio.TimeoutError, FileNotFoundError) as exc:
+            if proc is not None:
+                proc.kill()
+            return f"[Error: Kimi Code {bare}: {exc}]", None
+    if proc.returncode != 0:
+        return f"[Error: Kimi Code {bare}: exit {proc.returncode}]", None
+    result = _parse_kimi_stream(stdout.decode("utf-8", errors="replace"))
+    return (result if result else f"[No response from Kimi Code {bare}]"), None
+
+
 def _antigravity_model(model: str, effort: ReasoningEffort | None) -> str:
     """Map a Quorate Google model to an Antigravity model label."""
     bare = model.removeprefix("google/")
@@ -512,6 +597,8 @@ async def _zhipu(
 
 def _detect_provider(model: str) -> str:
     """Detect native provider from model ID."""
+    if model.startswith("kimi-code/"):
+        return "kimi-code"
     if "anthropic/" in model or "claude" in model:
         return "anthropic"
     if "google/" in model or "gemini" in model:
@@ -572,6 +659,17 @@ async def query_model(
         )
 
     # Try native provider
+    if provider == "kimi-code":
+        content, tokens = await _kimi_code_prompt(
+            entry.model,
+            messages,
+            _remaining_timeout(),
+        )
+        if not is_error(content):
+            return _result(content, "kimi-code", tokens)
+        _record_failure("kimi-code", content)
+        return _result(f"[Error: Kimi Code failed for {entry.name}]", "none")
+
     if provider == "anthropic":
         content, tokens = await _claude_print(
             entry.model,
