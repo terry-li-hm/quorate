@@ -50,6 +50,7 @@ ZERO_MARGINAL_COST_PROVIDERS = {
     "claude-print",
     "codex-exec",
     "kimi-code",
+    "kimi-code-api",
     "gemini-cli",  # Historical run records.
     "zhipu-native",
 }
@@ -104,7 +105,8 @@ class RunRecord:
     total_tokens_out: int
     est_cost_usd: float
     outcome: str | None = None
-    outcome_note: str | None = None
+    decision_value: str | None = None
+    k3_effect: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -117,7 +119,8 @@ class RunRecord:
             "total_tokens_out": self.total_tokens_out,
             "est_cost_usd": round(self.est_cost_usd, 4),
             "outcome": self.outcome,
-            "outcome_note": self.outcome_note,
+            "decision_value": self.decision_value,
+            "k3_effect": self.k3_effect,
         }
 
 
@@ -144,7 +147,8 @@ def build_record(
     judge_result: ModelCallResult | None = None,
     extra_results: Iterable[ModelCallResult] | None = None,
     outcome: str | None = None,
-    outcome_note: str | None = None,
+    decision_value: str | None = None,
+    k3_effect: str | None = None,
 ) -> RunRecord:
     """Assemble a RunRecord. extra_results carries judge/critique cost into totals."""
     results_list = list(results)
@@ -167,42 +171,53 @@ def build_record(
         total_tokens_out=total_out,
         est_cost_usd=cost,
         outcome=outcome,
-        outcome_note=outcome_note,
+        decision_value=decision_value,
+        k3_effect=k3_effect,
     )
 
 
-def _parse_outcome(line: str) -> tuple[str | None, str | None]:
-    """Parse a one-line outcome reply into (tag, note).
-
-    First token m/i selects matched/inverted; anything else (blank, s, ?) =>
-    untagged. Text after the first token is kept as a free-text note.
-    """
-    line = (line or "").strip()
-    if not line:
-        return None, None
-    head, _, rest = line.partition(" ")
-    tag = {"m": "matched", "i": "inverted"}.get(head[:1].lower())
-    return tag, (rest.strip() or None)
+def _parse_choice(line: str, choices: dict[str, str]) -> str | None:
+    """Parse one categorical key without retaining free text."""
+    value = (line or "").strip().lower()
+    return choices.get(value[:1]) if value else None
 
 
-def prompt_outcome() -> tuple[str | None, str | None]:
-    """Ask whether the verdict matched or inverted the going-in prior.
+def prompt_outcome(*, k3_present: bool = False) -> tuple[str | None, str | None, str | None]:
+    """Collect categorical alignment, value, and K3-effect signals.
 
-    TTY-guarded and exception-safe: returns (None, None) for non-interactive
+    TTY-guarded and exception-safe: returns null signals for non-interactive
     runs (dispatched/background/piped) so a council never blocks or crashes on
-    stdin. The one bit this captures — matched vs inverted — is what makes the
-    "is deliberation worth it?" question answerable from the run log.
+    stdin. No prompt, response, rationale, or free-text note is retained.
     """
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
-        return None, None
+        return None, None, None
     try:
-        reply = input(
-            "\nDid the verdict match or invert your going-in position? "
-            "[m]atched / [i]nverted / [Enter] skip (+ optional note)\n> "
+        outcome = _parse_choice(
+            input(
+                "\nDid the verdict match or invert your going-in position? "
+                "[m]atched / [i]nverted / [Enter] skip\n> "
+            ),
+            {"m": "matched", "i": "inverted"},
         )
+        decision_value = _parse_choice(
+            input(
+                "Did the council improve the final decision? "
+                "[b]etter / [s]ame / [w]orse / [p]ending / [Enter] skip\n> "
+            ),
+            {"b": "improved", "s": "unchanged", "w": "worsened", "p": "pending"},
+        )
+        k3_effect = None
+        if k3_present:
+            k3_effect = _parse_choice(
+                input(
+                    "Did K3 add distinct value? "
+                    "[p]ositive / [n]eutral / [h]armful / [u]nclear / [Enter] skip\n> "
+                ),
+                {"p": "positive", "n": "neutral", "h": "negative", "u": "unclear"},
+            )
     except (EOFError, KeyboardInterrupt):
-        return None, None
-    return _parse_outcome(reply)
+        return None, None, None
+    return outcome, decision_value, k3_effect
 
 
 def append(record: RunRecord, path: Path | None = None) -> Path:
@@ -254,7 +269,16 @@ def usage_report(
 
     aggregates: dict[str, dict] = {}
     modes = Counter(str(record.get("mode", "unknown")) for record in records)
+    outcomes = Counter(str(record["outcome"]) for record in records if record.get("outcome"))
+    decision_values = Counter(
+        str(record["decision_value"]) for record in records if record.get("decision_value")
+    )
+    k3_effects = Counter(str(record["k3_effect"]) for record in records if record.get("k3_effect"))
+    judge_values: dict[str, Counter] = {}
     for record in records:
+        if record.get("judge_model") and record.get("decision_value"):
+            judge = str(record["judge_model"])
+            judge_values.setdefault(judge, Counter())[str(record["decision_value"])] += 1
         for model in record.get("models", []):
             model_id = str(model.get("model_id") or model.get("name") or "unknown")
             aggregate = aggregates.setdefault(
@@ -293,13 +317,23 @@ def usage_report(
         )
     model_rows.sort(key=lambda row: (-int(row["appearances"]), str(row["name"])))
     report = {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at": end.isoformat(),
         "window_days": days,
         "window_start": start.isoformat(),
         "window_end": end.isoformat(),
         "runs": len(records),
         "modes": dict(sorted(modes.items())),
+        "evaluations": {
+            "rated_runs": sum(decision_values.values()),
+            "outcome": dict(sorted(outcomes.items())),
+            "decision_value": dict(sorted(decision_values.items())),
+            "k3_effect": dict(sorted(k3_effects.items())),
+            "decision_value_by_judge": {
+                judge: dict(sorted(values.items()))
+                for judge, values in sorted(judge_values.items())
+            },
+        },
         "estimated_api_cost_usd": round(
             sum(float(record.get("est_cost_usd") or 0) for record in records), 4
         ),

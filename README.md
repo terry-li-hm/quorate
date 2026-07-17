@@ -28,7 +28,7 @@ The six council debaters (`resolved_council()` in `config.py`):
 | GPT-5.6 Sol | OpenAI Codex CLI → OpenAI API → OpenRouter |
 | Claude Opus 4.8 | Claude CLI → Anthropic API → OpenRouter |
 | Grok 4.5 | xAI API → OpenRouter |
-| Kimi K3 | Kimi Code CLI subscription |
+| Kimi K3 | Kimi Code membership API → interactive Kimi Code CLI |
 | GLM-5.2 | ZhiPu API → OpenRouter |
 | DeepSeek V4 Pro | OpenRouter (DeepSeek) |
 
@@ -123,10 +123,11 @@ export ZHIPU_API_KEY="..."            # GLM (ZhiPu native)
 export ANTHROPIC_API_KEY="..."        # Claude (fallback if no claude CLI)
 export OPENAI_API_KEY="..."           # GPT (fallback if no Codex CLI)
 export OPENROUTER_API_KEY="..."       # DeepSeek and API fallback routes
+export KIMI_CODE_API_KEY="..."        # K3 through the documented membership API
 export QUORATE_OPENROUTER_KEY="..."   # Dedicated OpenRouter key (takes priority)
 ```
 
-GPT-5.6 Sol uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, Gemini uses Antigravity (`agy --print`), and K3 uses Kimi Code prompt mode. These routes use their respective subscriptions at zero marginal cost. Each subscription CLI receives an allowlisted environment without unrelated provider credentials and runs from a temporary workspace; Claude has no tools, Codex is read-only, and Antigravity uses sandboxed plan mode. GPT, Claude, and Gemini can fall back to a direct API and then OpenRouter; K3 fails closed when the subscribed CLI route is unavailable. Telemetry records the model and route actually used, and subscription-backed calls are not priced as API usage.
+GPT-5.6 Sol uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, and Gemini uses Antigravity (`agy --print`). K3 prefers Kimi's documented membership API with Quorate's real `User-Agent`; the official Kimi Code CLI is available only for a human-run interactive terminal. Headless and scheduled runs fail closed when `KIMI_CODE_API_KEY` is absent instead of simulating interactive use. These routes use their respective subscriptions at zero marginal cost. Each subscription CLI receives an allowlisted environment without unrelated provider credentials and runs from a temporary workspace; Claude has no tools, Codex is read-only, and Antigravity uses sandboxed plan mode. GPT, Claude, and Gemini can fall back to a direct API and then OpenRouter. Telemetry records the model and route actually used, and subscription-backed calls are not priced as API usage.
 
 The [subscription CLI isolation audit](docs/experiments/2026-07-17-subscription-cli-isolation.md)
 records the ambient-authority finding, containment changes, and live route verification.
@@ -154,7 +155,10 @@ has a strict-majority quorum. Quorate never edits its own roster from benchmark 
 `quorate usage --days 30` summarizes the response-free run log by model, route,
 reachability, mean and p95 latency, and estimated API cost. It writes a dated snapshot under
 `~/.local/state/quorate/usage/`. The monthly roster job records this snapshot without invoking
-another model, so membership value can be reviewed from actual use rather than synthetic assays.
+another model. Interactive councils ask for categorical alignment, decision-value, and K3-effect
+ratings while retaining no question, response, rationale, or free-text note. Usage snapshots
+aggregate those signals by judge so membership value and the Fable–GPT divergence can be reviewed
+from natural use rather than another synthetic assay.
 
 Material role changes also receive a durable experiment note. See the
 [2026-07-16 judge role selection](docs/experiments/2026-07-16-judge-role-selection.md)
@@ -165,6 +169,8 @@ for the direct retention test, the
 for the Kimi-seat replacement, the
 [2026-07-17 K3 downstream synthesis replay](docs/experiments/2026-07-17-k3-downstream-replay.md)
 for the deliberately inconclusive downstream follow-up, and the
+[2026-07-17 Kimi subscription terms review](docs/experiments/2026-07-17-kimi-subscription-terms.md)
+for the membership boundary and API-route decision, the
 [2026-07-16 DeepSeek seat selection](docs/experiments/2026-07-16-deepseek-seat-selection.md)
 for the evidence behind the sixth council seat, and the
 [2026-07-16 brainstorm mode validation](docs/experiments/2026-07-16-brainstorm-mode.md)

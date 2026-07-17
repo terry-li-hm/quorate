@@ -363,14 +363,16 @@ async def run_council(
             f"\n[bold red]⚠ Partial council: {len(blind_failed)}/{len(blind_results)} models failed"
             f" ({names})[/bold red]"
         )
-    outcome, outcome_note = runlog.prompt_outcome()
+    k3_present = any(result.model_id == "k3" and not result.is_error for result in blind_results)
+    outcome, decision_value, k3_effect = runlog.prompt_outcome(k3_present=k3_present)
     record = runlog.build_record(
         mode="council",
         results=blind_results,
         total_duration_s=duration,
         judge_model=judge_used,
         outcome=outcome,
-        outcome_note=outcome_note,
+        decision_value=decision_value,
+        k3_effect=k3_effect,
     )
     runlog.append(record)
     footer_lines, summary = runlog.format_footer(blind_results, duration)

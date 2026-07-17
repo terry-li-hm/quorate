@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import re
+import sys
 import time
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from quorate.config import (
     ANTHROPIC_URL,
     ANTHROPIC_VERSION,
     GOOGLE_AI_STUDIO_URL,
+    KIMI_CODE_URL,
     OPENROUTER_URL,
     XAI_URL,
     ZHIPU_URL,
@@ -31,6 +33,7 @@ from quorate.config import (
 type ProviderResult = tuple[str, dict[str, int] | None]
 
 THINK_RE = re.compile(r"(?s)<think>.*?</think>")
+KIMI_CODE_USER_AGENT = "quorate"
 
 
 def _strip_think(content: str) -> str:
@@ -100,6 +103,55 @@ async def _openrouter(
     choices = data.get("choices", [])
     content = ((choices[0].get("message") or {}).get("content") or "").strip() if choices else ""
     text = _strip_think(content) if content else f"[No response from {model}]"
+    return text, tokens
+
+
+async def _kimi_code_api(
+    client: httpx.AsyncClient,
+    api_key: str,
+    model: str,
+    messages: list[Message],
+    max_tokens: int,
+    timeout: float,
+) -> ProviderResult:
+    """Query the documented Kimi Code membership API with Quorate's real identity."""
+    bare = model.removeprefix("kimi-code/")
+    body = {
+        "model": bare,
+        "messages": [message.to_dict() for message in messages],
+        "max_tokens": max_tokens,
+    }
+    try:
+        response = await client.post(
+            KIMI_CODE_URL,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "User-Agent": KIMI_CODE_USER_AGENT,
+            },
+            json=body,
+            timeout=timeout,
+        )
+    except (httpx.TimeoutException, httpx.ConnectError) as exc:
+        return f"[Error: Kimi Code API {bare}: {exc}]", None
+    if response.status_code != 200:
+        return f"[Error: HTTP {response.status_code} from Kimi Code API {bare}]", None
+    data = response.json()
+    if "error" in data:
+        error = data["error"]
+        message = error.get("message", "Unknown") if isinstance(error, dict) else "Unknown"
+        return f"[Error: Kimi Code API {bare}: {message}]", None
+    usage = data.get("usage")
+    tokens = (
+        {
+            "tokens_in": usage.get("prompt_tokens"),
+            "tokens_out": usage.get("completion_tokens"),
+        }
+        if isinstance(usage, dict)
+        else None
+    )
+    choices = data.get("choices", [])
+    content = ((choices[0].get("message") or {}).get("content") or "").strip() if choices else ""
+    text = _strip_think(content) if content else f"[No response from Kimi Code API {bare}]"
     return text, tokens
 
 
@@ -683,14 +735,33 @@ async def query_model(
 
     # Try native provider
     if provider == "kimi-code":
-        content, tokens = await _kimi_code_prompt(
-            entry.model,
-            messages,
-            _remaining_timeout(),
-        )
-        if not is_error(content):
-            return _result(content, "kimi-code", tokens)
-        _record_failure("kimi-code", content)
+        kimi_code_key = keys.get("kimi_code")
+        if kimi_code_key:
+            content, tokens = await _kimi_code_api(
+                client,
+                kimi_code_key,
+                entry.model,
+                messages,
+                max_tokens,
+                _remaining_timeout(),
+            )
+            if not is_error(content):
+                return _result(content, "kimi-code-api", tokens)
+            _record_failure("kimi-code-api", content)
+        else:
+            _record_missing("kimi-code-api")
+
+        if sys.stdin.isatty() and sys.stdout.isatty():
+            content, tokens = await _kimi_code_prompt(
+                entry.model,
+                messages,
+                _remaining_timeout(),
+            )
+            if not is_error(content):
+                return _result(content, "kimi-code", tokens)
+            _record_failure("kimi-code", content)
+        else:
+            diagnostics.append("kimi-code:interactive_only")
         return _result(f"[Error: Kimi Code failed for {entry.name}]", "none")
 
     if provider == "anthropic":

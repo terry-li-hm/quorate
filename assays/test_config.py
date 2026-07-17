@@ -4,6 +4,7 @@ from quorate.config import (
     Message,
     ReasoningEffort,
     _display_name,
+    api_keys,
     benchmark_models,
     brainstorm_models,
     is_error,
@@ -16,6 +17,11 @@ from quorate.config import (
     resolved_judge,
     resolved_judge_fallback,
 )
+
+
+def test_api_keys_include_kimi_code_membership_key(monkeypatch):
+    monkeypatch.setenv("KIMI_CODE_API_KEY", "membership-key")
+    assert api_keys()["kimi_code"] == "membership-key"
 
 
 class TestDisplayName:

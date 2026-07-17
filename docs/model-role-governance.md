@@ -23,7 +23,9 @@ Do not rerun synthetic comparisons merely because a public benchmark looks stron
 
 Quorate treats every question, context item, and persona as an external disclosure. Credentials, personal data, confidential client material, private communications, proprietary source text, and reconstructable internal context are prohibited regardless of route.
 
-Subscription CLIs receive an allowlisted environment and run in temporary workspaces. Kimi Code additionally runs without discovered skills and fails closed when its subscribed route is unavailable. It still receives its home and client-configuration paths because authentication requires them. This containment limits ambient authority; it does not change the disclosure classification or replace review of Moonshot's current terms. K3 is therefore limited to public, synthetic, or deliberately sanitized Quorate inputs.
+Subscription CLIs receive an allowlisted environment and run in temporary workspaces. K3 uses the documented Kimi Code membership API for headless and scheduled work, preserving Quorate's real client identity. The official CLI remains available only in an interactive terminal, runs without discovered skills, and receives its home and client-configuration paths because authentication requires them. Without a membership API key, non-interactive K3 calls fail closed. This containment limits ambient authority; it does not change the disclosure classification or replace review of Moonshot's current terms.
+
+Moonshot's current terms allow submitted content to be used to operate, improve, and develop the service, including model improvement and research. A member can request an opt-out through `membership@moonshot.ai`. Until that opt-out is confirmed, and regardless of it afterward, K3 remains limited to public, synthetic, or deliberately sanitized Quorate inputs.
 
 ## Subscription renewal
 
@@ -33,4 +35,4 @@ Renew only when K3 remains admitted to at least one real role, usage is material
 
 ## Current K3 disposition
 
-As of 17 July 2026, K3 is deployed as a trial in Quorate's Kimi family seat, which supplies its council and brainstorm uses. Its blind-phase role assay and route canaries passed, while its controlled downstream replay was inconclusive and response-free telemetry contains no natural K3 run yet. Promote the seat to production status only after natural use supports its reliability and role value. K3 did not pass Vivesca's coding-route contract and is not admitted there. It is not admitted to mTOR; a non-coding challenger or reviewer role remains a candidate that requires its own gate.
+As of 17 July 2026, K3 is deployed as a trial in Quorate's Kimi family seat, which supplies its council and brainstorm uses. Its blind-phase role assay and route canaries passed, while its controlled downstream replay was inconclusive and response-free telemetry contains no natural K3 run yet. Interactive councils now collect categorical decision-value and K3-effect signals without retaining prose. Promote the seat to production status only after natural use supports its reliability and role value. K3 did not pass Vivesca's coding-route contract and is not admitted there. It is not admitted to mTOR; a non-coding challenger or reviewer role remains a candidate that requires its own gate.

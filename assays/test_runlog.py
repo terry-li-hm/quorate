@@ -73,7 +73,14 @@ class TestEstimateCost:
 
     @pytest.mark.parametrize(
         "provider",
-        ["codex-exec", "claude-print", "antigravity-cli", "gemini-cli", "kimi-code"],
+        [
+            "codex-exec",
+            "claude-print",
+            "antigravity-cli",
+            "gemini-cli",
+            "kimi-code",
+            "kimi-code-api",
+        ],
     )
     def test_subscription_routes_have_zero_marginal_cost(self, provider):
         r = _result(
@@ -153,6 +160,10 @@ class TestUsageReport:
                 )
             ],
             total_duration_s=20,
+            judge_model="anthropic/claude-fable-5",
+            outcome="inverted",
+            decision_value="improved",
+            k3_effect="positive",
         ).to_dict()
         recent["ts"] = (now - dt.timedelta(days=2)).isoformat()
         old = dict(recent)
@@ -171,6 +182,15 @@ class TestUsageReport:
         assert report["models"][0]["model_id"] == "k3"
         assert report["models"][0]["success_rate"] == 1.0
         assert report["models"][0]["providers"] == {"kimi-code": 1}
+        assert report["evaluations"] == {
+            "rated_runs": 1,
+            "outcome": {"inverted": 1},
+            "decision_value": {"improved": 1},
+            "k3_effect": {"positive": 1},
+            "decision_value_by_judge": {
+                "anthropic/claude-fable-5": {"improved": 1},
+            },
+        }
         assert Path(report["snapshot_path"]).exists()
 
     def test_rejects_non_positive_window(self):
@@ -195,19 +215,11 @@ class TestFormatFooter:
 
 
 class TestOutcome:
-    def test_parse_matched_inverted_skip(self):
-        assert runlog._parse_outcome("m") == ("matched", None)
-        assert runlog._parse_outcome("i") == ("inverted", None)
-        assert runlog._parse_outcome("") == (None, None)
-        assert runlog._parse_outcome("s") == (None, None)
-
-    def test_parse_keeps_note(self):
-        assert runlog._parse_outcome("i flipped my call on precedent") == (
-            "inverted",
-            "flipped my call on precedent",
-        )
-        # case-insensitive head, note preserved
-        assert runlog._parse_outcome("M confirmed prior") == ("matched", "confirmed prior")
+    def test_parse_choice_is_categorical_only(self):
+        assert runlog._parse_choice("M", {"m": "matched"}) == "matched"
+        assert runlog._parse_choice("m private rationale", {"m": "matched"}) == "matched"
+        assert runlog._parse_choice("", {"m": "matched"}) is None
+        assert runlog._parse_choice("s", {"m": "matched"}) is None
 
     def test_record_serialises_outcome(self):
         rec = runlog.build_record(
@@ -215,17 +227,21 @@ class TestOutcome:
             [_result()],
             total_duration_s=1.0,
             outcome="inverted",
-            outcome_note="changed the decision",
+            decision_value="improved",
+            k3_effect="positive",
         )
         d = rec.to_dict()
         assert d["outcome"] == "inverted"
-        assert d["outcome_note"] == "changed the decision"
+        assert d["decision_value"] == "improved"
+        assert d["k3_effect"] == "positive"
+        assert "outcome_note" not in d
 
     def test_default_outcome_is_null(self):
         rec = runlog.build_record("quick", [_result()], total_duration_s=1.0)
         d = rec.to_dict()
         assert d["outcome"] is None
-        assert d["outcome_note"] is None
+        assert d["decision_value"] is None
+        assert d["k3_effect"] is None
 
     def test_prompt_outcome_tty_branch(self, monkeypatch):
         # the capture path: interactive TTY + a real reply must parse through
@@ -233,8 +249,26 @@ class TestOutcome:
 
         monkeypatch.setattr(runlog.sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr(runlog.sys.stdout, "isatty", lambda: True)
-        monkeypatch.setattr(builtins, "input", lambda *a: "i changed my call")
-        assert runlog.prompt_outcome() == ("inverted", "changed my call")
+        replies = iter(("i", "b", "p"))
+        monkeypatch.setattr(builtins, "input", lambda *a: next(replies))
+        assert runlog.prompt_outcome(k3_present=True) == (
+            "inverted",
+            "improved",
+            "positive",
+        )
+
+    def test_prompt_outcome_skips_k3_when_absent(self, monkeypatch):
+        import builtins
+
+        monkeypatch.setattr(runlog.sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(runlog.sys.stdout, "isatty", lambda: True)
+        replies = iter(("m", "s"))
+        monkeypatch.setattr(builtins, "input", lambda *a: next(replies))
+        assert runlog.prompt_outcome(k3_present=False) == (
+            "matched",
+            "unchanged",
+            None,
+        )
 
     def test_prompt_outcome_eof_mid_prompt_is_safe(self, monkeypatch):
         # Ctrl-D / EOF at the prompt must not crash a finished council
@@ -247,4 +281,4 @@ class TestOutcome:
             raise EOFError
 
         monkeypatch.setattr(builtins, "input", _eof)
-        assert runlog.prompt_outcome() == (None, None)
+        assert runlog.prompt_outcome() == (None, None, None)

@@ -63,6 +63,7 @@ class ModelCallResult:
 
 # API endpoints
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+KIMI_CODE_URL = "https://api.kimi.com/coding/v1/chat/completions"
 GOOGLE_AI_STUDIO_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 ZHIPU_URL = "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions"
 XAI_URL = "https://api.x.ai/v1/chat/completions"
@@ -281,6 +282,7 @@ def api_keys() -> dict[str, str | None]:
     """Load API keys from environment. Keys injected by op run via quorate.env.op."""
     return {
         "openrouter": _env("QUORATE_OPENROUTER_KEY") or _env("OPENROUTER_API_KEY"),
+        "kimi_code": _env("KIMI_CODE_API_KEY"),
         "google": _env("GOOGLE_API_KEY"),
         "zhipu": _env("ZHIPU_API_KEY"),
         "xai": _env("XAI_API_KEY"),

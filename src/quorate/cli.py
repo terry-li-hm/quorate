@@ -550,6 +550,10 @@ def usage(
                 f"  {model['name']}: {model['reachable']}/{model['appearances']} reachable, "
                 f"{model['mean_latency_s']}s mean"
             )
+        evaluations = report["evaluations"]
+        console.print(
+            f"Categorically rated runs: {evaluations['rated_runs']} {evaluations['decision_value']}"
+        )
         if report.get("snapshot_path"):
             console.print(f"[dim]Snapshot: {report['snapshot_path']}[/dim]")
     _emit_result("quorate usage", report, json_output)

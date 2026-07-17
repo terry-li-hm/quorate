@@ -1,16 +1,23 @@
 """Tests for quorate.api — strip_think, provider detection, error handling."""
 
+import asyncio
+import json
+
+import httpx
+
+from quorate import api
 from quorate.api import (
     _antigravity_model,
     _detect_provider,
     _diagnostic_code,
     _kimi_cli_env,
+    _kimi_code_api,
     _parse_kimi_stream,
     _strip_think,
     _subscription_cli_env,
     quorum_health,
 )
-from quorate.config import ModelCallResult, ReasoningEffort
+from quorate.config import Message, ModelCallResult, ModelEntry, ReasoningEffort
 
 
 class TestStripThink:
@@ -101,6 +108,57 @@ def test_parse_kimi_stream_excludes_metadata():
         )
     )
     assert _parse_kimi_stream(payload) == "answer"
+
+
+def test_kimi_code_api_uses_documented_endpoint_and_real_identity():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == "https://api.kimi.com/coding/v1/chat/completions"
+        assert request.headers["authorization"] == "Bearer membership-key"
+        assert request.headers["user-agent"] == "quorate"
+        body = json.loads(request.content)
+        assert body["model"] == "k3"
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "answer"}}],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 4},
+            },
+        )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await _kimi_code_api(
+                client,
+                "membership-key",
+                "kimi-code/k3",
+                [Message.user("question")],
+                128,
+                10,
+            )
+
+    assert asyncio.run(run()) == ("answer", {"tokens_in": 12, "tokens_out": 4})
+
+
+def test_headless_kimi_fails_closed_without_membership_api_key(monkeypatch):
+    monkeypatch.setattr(api.sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr(api.sys.stdout, "isatty", lambda: False)
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: None)) as client:
+            return await api.query_model(
+                client,
+                {},
+                ModelEntry("Kimi-K3", "kimi-code/k3"),
+                [Message.user("question")],
+            )
+
+    result = asyncio.run(run())
+    assert result.provider == "none"
+    assert result.is_error
+    assert result.diagnostics == (
+        "kimi-code-api:no_credentials",
+        "kimi-code:interactive_only",
+    )
 
 
 def test_subscription_cli_environment_excludes_provider_secrets(monkeypatch):
