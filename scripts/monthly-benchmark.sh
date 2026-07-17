@@ -31,3 +31,7 @@ status=$(
 if [[ "$status" != "healthy" ]]; then
   cat "$output"
 fi
+
+if ! /Users/terry/.local/bin/quorate-core usage --days 30 --json >/dev/null 2>&1; then
+  print -u2 "quorate monthly usage snapshot failed"
+fi

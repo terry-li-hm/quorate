@@ -126,7 +126,10 @@ export OPENROUTER_API_KEY="..."       # DeepSeek and API fallback routes
 export QUORATE_OPENROUTER_KEY="..."   # Dedicated OpenRouter key (takes priority)
 ```
 
-GPT-5.6 Sol uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, Gemini uses Antigravity (`agy --print`), and K3 uses Kimi Code prompt mode. These routes use their respective subscriptions at zero marginal cost. GPT, Claude, and Gemini can fall back to a direct API and then OpenRouter; K3 fails closed when the subscribed CLI route is unavailable. Telemetry records the model and route actually used, and subscription-backed calls are not priced as API usage.
+GPT-5.6 Sol uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, Gemini uses Antigravity (`agy --print`), and K3 uses Kimi Code prompt mode. These routes use their respective subscriptions at zero marginal cost. Each subscription CLI receives an allowlisted environment without unrelated provider credentials and runs from a temporary workspace; Claude has no tools, Codex is read-only, and Antigravity uses sandboxed plan mode. GPT, Claude, and Gemini can fall back to a direct API and then OpenRouter; K3 fails closed when the subscribed CLI route is unavailable. Telemetry records the model and route actually used, and subscription-backed calls are not priced as API usage.
+
+The [subscription CLI isolation audit](docs/experiments/2026-07-17-subscription-cli-isolation.md)
+records the ambient-authority finding, containment changes, and live route verification.
 
 Scripted runs require a strict majority of configured seats. Quick mode therefore needs four of seven successful responses, council needs four of six in its blind phase, and brainstorm needs five of eight independent generators. A degraded run returns a non-zero JSON error envelope containing the partial responses and safe route diagnostics such as `http_404`, `timeout`, or `no_credentials`; provider prose and secrets are never copied into diagnostics.
 
@@ -144,13 +147,20 @@ source such as Epoch AI, Arena, or SWE-bench, then require agreement with the lo
 canaries before changing a seat. One failed seat is tolerated when every canary still
 has a strict-majority quorum. Quorate never edits its own roster from benchmark output.
 
+`quorate usage --days 30` summarizes the response-free run log by model, route,
+reachability, mean and p95 latency, and estimated API cost. It writes a dated snapshot under
+`~/.local/state/quorate/usage/`. The monthly roster job records this snapshot without invoking
+another model, so membership value can be reviewed from actual use rather than synthetic assays.
+
 Material role changes also receive a durable experiment note. See the
 [2026-07-16 judge role selection](docs/experiments/2026-07-16-judge-role-selection.md)
 for the evidence behind the Fable judge architecture, the
 [2026-07-17 Fable versus GPT judge assay](docs/experiments/2026-07-17-fable-vs-gpt-judge-assay.md)
 for the direct retention test, the
 [2026-07-17 K3 versus K2.6 council-seat evaluation](docs/experiments/2026-07-17-k3-vs-k2.6-council-seat.md)
-for the Kimi-seat replacement, and the
+for the Kimi-seat replacement, the
+[2026-07-17 K3 downstream synthesis replay](docs/experiments/2026-07-17-k3-downstream-replay.md)
+for the deliberately inconclusive downstream follow-up, and the
 [2026-07-16 DeepSeek seat selection](docs/experiments/2026-07-16-deepseek-seat-selection.md)
 for the evidence behind the sixth council seat, and the
 [2026-07-16 brainstorm mode validation](docs/experiments/2026-07-16-brainstorm-mode.md)
@@ -158,7 +168,7 @@ for the divergent ideation architecture.
 
 On the Vivesca host, `scripts/monthly-benchmark.sh` is the non-interactive runner.
 It loads the locally resolved credential environment, uses subscription routes first,
-and stays silent when the roster is healthy. The corresponding LaunchAgent runs at
+records the rolling usage snapshot, and stays silent when the roster is healthy. The corresponding LaunchAgent runs at
 09:00 on the first day of each month and writes only degraded or failed output to
 `~/logs/quorate-monthly-benchmark.log`.
 

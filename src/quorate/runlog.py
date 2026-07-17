@@ -6,8 +6,11 @@ import datetime as dt
 import json
 import os
 import sys
+from collections import Counter
 from dataclasses import dataclass
+from math import ceil
 from pathlib import Path
+from statistics import mean
 from typing import Iterable
 
 from quorate.config import ModelCallResult
@@ -16,6 +19,11 @@ from quorate.config import ModelCallResult
 def _default_log_path() -> Path:
     base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
     return Path(base) / "quorate" / "runs.jsonl"
+
+
+def _default_usage_dir() -> Path:
+    base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    return Path(base) / "quorate" / "usage"
 
 
 PRICES: dict[str, tuple[float, float]] = {
@@ -41,6 +49,7 @@ ZERO_MARGINAL_COST_PROVIDERS = {
     "antigravity-cli",
     "claude-print",
     "codex-exec",
+    "kimi-code",
     "gemini-cli",  # Historical run records.
     "zhipu-native",
 }
@@ -203,6 +212,109 @@ def append(record: RunRecord, path: Path | None = None) -> Path:
     with target.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record.to_dict(), ensure_ascii=False) + "\n")
     return target
+
+
+def _percentile_95(values: list[float]) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    return ordered[max(0, ceil(0.95 * len(ordered)) - 1)]
+
+
+def usage_report(
+    days: int = 30,
+    *,
+    path: Path | None = None,
+    now: dt.datetime | None = None,
+    save: bool = False,
+    snapshot_dir: Path | None = None,
+) -> dict:
+    """Aggregate non-sensitive route telemetry over a rolling window."""
+    if days < 1:
+        raise ValueError("days must be at least 1")
+    end = now or dt.datetime.now(dt.timezone.utc)
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=dt.timezone.utc)
+    end = end.astimezone(dt.timezone.utc)
+    start = end - dt.timedelta(days=days)
+    target = path or _default_log_path()
+    records: list[dict] = []
+    if target.exists():
+        for line in target.read_text(encoding="utf-8").splitlines():
+            try:
+                record = json.loads(line)
+                timestamp = dt.datetime.fromisoformat(str(record["ts"]).replace("Z", "+00:00"))
+                if timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=dt.timezone.utc)
+                timestamp = timestamp.astimezone(dt.timezone.utc)
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                continue
+            if start <= timestamp <= end:
+                records.append(record)
+
+    aggregates: dict[str, dict] = {}
+    modes = Counter(str(record.get("mode", "unknown")) for record in records)
+    for record in records:
+        for model in record.get("models", []):
+            model_id = str(model.get("model_id") or model.get("name") or "unknown")
+            aggregate = aggregates.setdefault(
+                model_id,
+                {
+                    "name": str(model.get("name") or model_id),
+                    "model_id": model_id,
+                    "appearances": 0,
+                    "reachable": 0,
+                    "durations": [],
+                    "providers": Counter(),
+                },
+            )
+            aggregate["appearances"] += 1
+            aggregate["reachable"] += bool(model.get("ok"))
+            duration = model.get("duration_s")
+            if isinstance(duration, int | float):
+                aggregate["durations"].append(float(duration))
+            aggregate["providers"][str(model.get("provider") or "unknown")] += 1
+
+    model_rows = []
+    for aggregate in aggregates.values():
+        durations = aggregate.pop("durations")
+        appearances = int(aggregate["appearances"])
+        reachable = int(aggregate["reachable"])
+        model_rows.append(
+            {
+                **aggregate,
+                "success_rate": round(reachable / appearances, 3) if appearances else 0.0,
+                "mean_latency_s": round(mean(durations), 2) if durations else None,
+                "p95_latency_s": (
+                    round(value, 2) if (value := _percentile_95(durations)) is not None else None
+                ),
+                "providers": dict(sorted(aggregate["providers"].items())),
+            }
+        )
+    model_rows.sort(key=lambda row: (-int(row["appearances"]), str(row["name"])))
+    report = {
+        "schema_version": 1,
+        "generated_at": end.isoformat(),
+        "window_days": days,
+        "window_start": start.isoformat(),
+        "window_end": end.isoformat(),
+        "runs": len(records),
+        "modes": dict(sorted(modes.items())),
+        "estimated_api_cost_usd": round(
+            sum(float(record.get("est_cost_usd") or 0) for record in records), 4
+        ),
+        "models": model_rows,
+        "source": str(target),
+    }
+    if save:
+        directory = snapshot_dir or _default_usage_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        snapshot = directory / f"{end.date().isoformat()}.json"
+        snapshot.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        report["snapshot_path"] = str(snapshot)
+    return report
 
 
 def format_footer(

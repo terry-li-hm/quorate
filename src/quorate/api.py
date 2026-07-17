@@ -304,40 +304,47 @@ async def _codex_exec(
     prompt = "\n\n".join(sections)
     if not prompt:
         return f"[Error: Empty prompt for codex {bare}]", None
+    reasoning_effort = effort.value if effort else "xhigh"
     import tempfile
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as tmp:
-        outfile = tmp.name
-    reasoning_effort = effort.value if effort else "xhigh"
-    try:
-        proc = await asyncio.wait_for(
-            asyncio.create_subprocess_exec(
-                "codex",
-                "exec",
-                "-m",
-                bare,
-                "-o",
-                outfile,
-                "--skip-git-repo-check",
-                "-c",
-                f'model_reasoning_effort="{reasoning_effort}"',
-                prompt,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            ),
-            timeout=timeout,
-        )
-        await asyncio.wait_for(proc.communicate(input=b"\n"), timeout=timeout)
-    except (asyncio.TimeoutError, FileNotFoundError) as exc:
-        return f"[Error: codex exec {bare}: {exc}]", None
-    finally:
-        import os
-
-        result = ""
-        if os.path.exists(outfile):
-            result = Path(outfile).read_text().strip()
-            os.unlink(outfile)
+    proc = None
+    with tempfile.TemporaryDirectory(prefix="quorate-codex-") as temp_dir:
+        root = Path(temp_dir)
+        outfile = root / "response.txt"
+        try:
+            proc = await asyncio.wait_for(
+                asyncio.create_subprocess_exec(
+                    "codex",
+                    "exec",
+                    "--ephemeral",
+                    "--ignore-user-config",
+                    "--ignore-rules",
+                    "--skip-git-repo-check",
+                    "--sandbox",
+                    "read-only",
+                    "-C",
+                    str(root),
+                    "-m",
+                    bare,
+                    "-o",
+                    str(outfile),
+                    "-c",
+                    f'model_reasoning_effort="{reasoning_effort}"',
+                    prompt,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=_subscription_cli_env(),
+                ),
+                timeout=timeout,
+            )
+            await asyncio.wait_for(proc.communicate(input=b"\n"), timeout=timeout)
+        except (asyncio.TimeoutError, FileNotFoundError) as exc:
+            if proc is not None:
+                proc.kill()
+                await proc.communicate()
+            return f"[Error: codex exec {bare}: {exc}]", None
+        result = outfile.read_text().strip() if outfile.exists() else ""
     if proc.returncode != 0:
         return f"[Error: codex exec {bare}: exit {proc.returncode}]", None
     return (result if result else f"[No response from codex {bare}]"), None
@@ -360,28 +367,31 @@ async def _claude_print(
     prompt = "\n\n".join(sections)
     if not prompt:
         return f"[Error: Empty prompt for {bare}]", None
-    # Strip ANTHROPIC_API_KEY so claude --print uses Max subscription, not depleted API credits
-    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
     proc = None
     command = ["claude", "--model", bare, "--print", "--output-format", "json"]
     if effort:
         command.extend(["--effort", effort.value])
-    command.extend(["-p", prompt])
-    try:
-        proc = await asyncio.wait_for(
-            asyncio.create_subprocess_exec(
-                *command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-            ),
-            timeout=timeout,
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except (asyncio.TimeoutError, FileNotFoundError) as exc:
-        if proc is not None:
-            proc.kill()
-        return f"[Error: claude --print {bare}: {exc}]", None
+    command.extend(["--tools", "", "--setting-sources", "", "-p", prompt])
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="quorate-claude-") as temp_dir:
+        try:
+            proc = await asyncio.wait_for(
+                asyncio.create_subprocess_exec(
+                    *command,
+                    cwd=temp_dir,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=_subscription_cli_env(),
+                ),
+                timeout=timeout,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except (asyncio.TimeoutError, FileNotFoundError) as exc:
+            if proc is not None:
+                proc.kill()
+                await proc.communicate()
+            return f"[Error: claude --print {bare}: {exc}]", None
     if proc.returncode != 0:
         detail = (stderr or b"").decode().strip() or f"exit {proc.returncode}"
         return (
@@ -419,7 +429,7 @@ def _parse_kimi_stream(payload: str) -> str:
     return "\n".join(parts).strip()
 
 
-def _kimi_cli_env() -> dict[str, str]:
+def _subscription_cli_env() -> dict[str, str]:
     allowed = {
         "HOME",
         "LANG",
@@ -433,8 +443,15 @@ def _kimi_cli_env() -> dict[str, str]:
         "TMPDIR",
         "USER",
         "XDG_CONFIG_HOME",
+        "CODEX_HOME",
+        "CLAUDE_CONFIG_DIR",
     }
     return {key: value for key, value in os.environ.items() if key in allowed}
+
+
+def _kimi_cli_env() -> dict[str, str]:
+    """Compatibility alias for the shared subscription CLI environment."""
+    return _subscription_cli_env()
 
 
 async def _kimi_code_prompt(
@@ -477,7 +494,7 @@ async def _kimi_code_prompt(
                     cwd=root,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
-                    env=_kimi_cli_env(),
+                    env=_subscription_cli_env(),
                 ),
                 timeout=timeout,
             )
@@ -520,27 +537,33 @@ async def _antigravity_prompt(
     if not prompt:
         return f"[Error: Empty prompt for Antigravity {label}]", None
     proc = None
-    try:
-        proc = await asyncio.wait_for(
-            asyncio.create_subprocess_exec(
-                "agy",
-                "--print",
-                prompt,
-                "--sandbox",
-                "--mode",
-                "plan",
-                "--model",
-                label,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            ),
-            timeout=timeout,
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except (asyncio.TimeoutError, FileNotFoundError) as exc:
-        if proc is not None:
-            proc.kill()
-        return f"[Error: agy --print {label}: {exc}]", None
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="quorate-antigravity-") as temp_dir:
+        try:
+            proc = await asyncio.wait_for(
+                asyncio.create_subprocess_exec(
+                    "agy",
+                    "--print",
+                    prompt,
+                    "--sandbox",
+                    "--mode",
+                    "plan",
+                    "--model",
+                    label,
+                    cwd=temp_dir,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=_subscription_cli_env(),
+                ),
+                timeout=timeout,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except (asyncio.TimeoutError, FileNotFoundError) as exc:
+            if proc is not None:
+                proc.kill()
+                await proc.communicate()
+            return f"[Error: agy --print {label}: {exc}]", None
     if proc.returncode != 0:
         detail = (stderr or b"").decode().strip() or f"exit {proc.returncode}"
         return (

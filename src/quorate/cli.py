@@ -106,6 +106,26 @@ _tree.add_command(
     annotations={"readonly": True},
 )
 _tree.add_command(
+    "usage",
+    description="Summarize rolling route usage, reliability, latency, and API cost",
+    params=[
+        {
+            "name": "--days",
+            "type": "integer",
+            "default": 30,
+            "description": "Rolling observation window",
+        },
+        {
+            "name": "--no-save",
+            "type": "boolean",
+            "default": False,
+            "description": "Do not write the dated local snapshot",
+        },
+        {"name": "--json", "type": "boolean", "default": False},
+    ],
+    annotations={"readonly": True},
+)
+_tree.add_command(
     "brainstorm",
     description="Divergent ideation — independent lenses, cross-pollination, curated shortlist",
     params=[
@@ -499,6 +519,40 @@ def benchmark(
         if report.get("snapshot_path"):
             console.print(f"[dim]Snapshot: {report['snapshot_path']}[/dim]")
     _emit_result("quorate benchmark", report, json_output)
+
+
+@app.command
+def usage(
+    *,
+    days: int = 30,
+    save: bool = True,
+    json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
+) -> None:
+    """Summarize rolling route usage without retaining prompts or responses."""
+    json_output = json_output or _is_agent()
+    from quorate.runlog import usage_report
+
+    try:
+        report = usage_report(days=days, save=save)
+    except ValueError as exc:
+        emit_err(
+            "quorate usage",
+            str(exc),
+            EXIT_ERROR,
+            fix="Use --days with a positive integer.",
+        )
+        raise SystemExit(EXIT_ERROR) from exc
+    console = Console(quiet=json_output)
+    if not json_output:
+        console.print(f"Runs in the last {days} days: {report['runs']}")
+        for model in report["models"]:
+            console.print(
+                f"  {model['name']}: {model['reachable']}/{model['appearances']} reachable, "
+                f"{model['mean_latency_s']}s mean"
+            )
+        if report.get("snapshot_path"):
+            console.print(f"[dim]Snapshot: {report['snapshot_path']}[/dim]")
+    _emit_result("quorate usage", report, json_output)
 
 
 @app.command

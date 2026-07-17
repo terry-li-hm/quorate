@@ -7,6 +7,7 @@ from quorate.api import (
     _kimi_cli_env,
     _parse_kimi_stream,
     _strip_think,
+    _subscription_cli_env,
     quorum_health,
 )
 from quorate.config import ModelCallResult, ReasoningEffort
@@ -102,14 +103,15 @@ def test_parse_kimi_stream_excludes_metadata():
     assert _parse_kimi_stream(payload) == "answer"
 
 
-def test_kimi_cli_environment_excludes_provider_secrets(monkeypatch):
+def test_subscription_cli_environment_excludes_provider_secrets(monkeypatch):
     monkeypatch.setenv("PATH", "/bin")
     monkeypatch.setenv("OPENROUTER_API_KEY", "secret")
     monkeypatch.setenv("XAI_API_KEY", "secret")
-    environment = _kimi_cli_env()
+    environment = _subscription_cli_env()
     assert environment["PATH"] == "/bin"
     assert "OPENROUTER_API_KEY" not in environment
     assert "XAI_API_KEY" not in environment
+    assert _kimi_cli_env() == environment
 
 
 class TestQuorumHealth:

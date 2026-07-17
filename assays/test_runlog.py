@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import json
+from pathlib import Path
 
 import pytest
 
@@ -70,7 +72,8 @@ class TestEstimateCost:
         assert runlog.estimate_cost(r) == 0.0
 
     @pytest.mark.parametrize(
-        "provider", ["codex-exec", "claude-print", "antigravity-cli", "gemini-cli"]
+        "provider",
+        ["codex-exec", "claude-print", "antigravity-cli", "gemini-cli", "kimi-code"],
     )
     def test_subscription_routes_have_zero_marginal_cost(self, provider):
         r = _result(
@@ -133,6 +136,46 @@ class TestAppend:
         assert len(lines) == 2
         assert json.loads(lines[0])["mode"] == "quick"
         assert json.loads(lines[1])["mode"] == "council"
+
+
+class TestUsageReport:
+    def test_aggregates_window_and_saves_snapshot(self, tmp_path):
+        log = tmp_path / "runs.jsonl"
+        now = dt.datetime(2026, 7, 17, tzinfo=dt.timezone.utc)
+        recent = runlog.build_record(
+            "council",
+            [
+                _result(
+                    name="K3",
+                    model_id="k3",
+                    provider="kimi-code",
+                    latency=12.0,
+                )
+            ],
+            total_duration_s=20,
+        ).to_dict()
+        recent["ts"] = (now - dt.timedelta(days=2)).isoformat()
+        old = dict(recent)
+        old["ts"] = (now - dt.timedelta(days=40)).isoformat()
+        log.write_text("\n".join((json.dumps(recent), "not-json", json.dumps(old))) + "\n")
+
+        report = runlog.usage_report(
+            30,
+            path=log,
+            now=now,
+            save=True,
+            snapshot_dir=tmp_path / "usage",
+        )
+
+        assert report["runs"] == 1
+        assert report["models"][0]["model_id"] == "k3"
+        assert report["models"][0]["success_rate"] == 1.0
+        assert report["models"][0]["providers"] == {"kimi-code": 1}
+        assert Path(report["snapshot_path"]).exists()
+
+    def test_rejects_non_positive_window(self):
+        with pytest.raises(ValueError, match="at least 1"):
+            runlog.usage_report(0)
 
 
 class TestFormatFooter:
