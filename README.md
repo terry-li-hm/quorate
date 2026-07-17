@@ -146,7 +146,9 @@ has a strict-majority quorum. Quorate never edits its own roster from benchmark 
 
 Material role changes also receive a durable experiment note. See the
 [2026-07-16 judge role selection](docs/experiments/2026-07-16-judge-role-selection.md)
-for the evidence behind the Fable judge architecture and the
+for the evidence behind the Fable judge architecture, the
+[2026-07-17 Fable versus GPT judge assay](docs/experiments/2026-07-17-fable-vs-gpt-judge-assay.md)
+for the direct retention test, and the
 [2026-07-16 DeepSeek seat selection](docs/experiments/2026-07-16-deepseek-seat-selection.md)
 for the evidence behind the sixth council seat, and the
 [2026-07-16 brainstorm mode validation](docs/experiments/2026-07-16-brainstorm-mode.md)
