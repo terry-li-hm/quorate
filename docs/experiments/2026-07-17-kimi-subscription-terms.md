@@ -16,6 +16,12 @@ The [membership documentation](https://www.kimi.com/code/docs/en/kimi-code/membe
 
 The [Privacy Policy](https://www.kimi.com/user/agreement/userPrivacy?version=v2) and Terms state that prompts and generated content may be processed to improve and train the service. The Terms provide an opt-out for model improvement and research through `membership@moonshot.ai`. Quorate's data boundary remains unchanged even after an opt-out.
 
-## Account facts still requiring authentication
+## Authenticated account verification
 
-The public sources cannot establish the actual purchase price, purchase date, renewal date, payment channel, current remaining quota, or whether automatic renewal is enabled on this account. Those facts must be read from the authenticated subscription and Kimi Code Console pages. No cancellation, renewal, purchase, or Extra Usage setting was changed during this review.
+The public sources cannot establish account-specific billing and quota facts. An authenticated review confirmed that the current Allegretto subscription is monthly, automatically renewing, and has Extra Usage disabled; personal billing details are not retained in this repository. No cancellation, renewal, purchase, or Extra Usage setting was changed during this review.
+
+## Live route verification
+
+After the membership key was installed in secret management, a fixed response-free benchmark reached every one of the nine production roles. K3 passed all three canaries through `kimi-code-api` with 13.52 seconds mean latency and no fallback diagnostics. Fable 5 and GPT-5.6 Sol also passed all three canaries through their subscription routes. The suite passed 26 of 27 role-canary checks and retained quorum on every case.
+
+An initial invalid run exposed that the installed `quorate` entry point had drifted from the guarded effector to the raw tool binary, so no 1Password-backed API credentials reached the process. Re-running `scripts/install-local.sh` restored the guarded symlink; the healthy benchmark above was then run once. The invalid run is harness evidence, not model evidence.
