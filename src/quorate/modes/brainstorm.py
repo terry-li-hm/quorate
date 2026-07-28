@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 import httpx
 from porin import stream_event
@@ -172,6 +172,10 @@ async def run_brainstorm(
     timeout: float = 180,
     console: Console | None = None,
     json_output: bool = False,
+    prompt_round_runner: Callable[..., Awaitable[list[ModelCallResult]]] | None = None,
+    judge_runner: Callable[..., Awaitable[str]] | None = None,
+    curator_model: str | None = None,
+    curator_fallback_model: str | None = None,
 ) -> str | dict[str, Any]:
     """Generate independently, cross-pollinate once, and curate a shortlist."""
     console = console or Console()
@@ -179,6 +183,8 @@ async def run_brainstorm(
     full_question = f"{context}\n\n{question}" if context else question
     start = time.monotonic()
     lenses = [BRAINSTORM_LENSES[index % len(BRAINSTORM_LENSES)] for index in range(len(models))]
+    run_prompt_round = prompt_round_runner or _run_prompt_round
+    run_judge = judge_runner or query_judge
 
     console.print("\n[bold cyan]INDEPENDENT GENERATION[/bold cyan]")
     seed_prompts = [
@@ -188,7 +194,7 @@ async def run_brainstorm(
         ]
         for lens, instruction in lenses
     ]
-    seed_results = await _run_prompt_round(
+    seed_results = await run_prompt_round(
         models,
         seed_prompts,
         timeout=timeout,
@@ -242,7 +248,7 @@ async def run_brainstorm(
             ]
         )
 
-    cross_results = await _run_prompt_round(
+    cross_results = await run_prompt_round(
         cross_entries,
         cross_prompts,
         timeout=timeout,
@@ -269,13 +275,13 @@ async def run_brainstorm(
             )
 
     console.print("\n[bold cyan]CURATED SHORTLIST[/bold cyan]")
-    curator = resolved_judge()
-    fallback = resolved_judge_fallback()
+    curator = curator_model or resolved_judge()
+    fallback = curator_fallback_model or resolved_judge_fallback()
     curator_messages = [
         Message.system(CURATOR_SYSTEM),
         Message.user(f"Opportunity: {full_question}\n\n" + "\n\n".join(traces)),
     ]
-    curated = await query_judge(
+    curated = await run_judge(
         curator,
         curator_messages,
         max_tokens=4096,
@@ -284,7 +290,7 @@ async def run_brainstorm(
     )
     curator_used = curator
     if not _valid_curation(curated) and fallback != curator:
-        curated = await query_judge(
+        curated = await run_judge(
             fallback,
             curator_messages,
             max_tokens=4096,

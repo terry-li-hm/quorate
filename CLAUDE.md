@@ -18,12 +18,14 @@ scripts/install-local.sh
 - `src/quorate/modes/quick.py` — parallel queries, no debate
 - `src/quorate/modes/brainstorm.py` — independent lenses → cross-pollination → curation
 - `src/quorate/modes/council.py` — blind → debate → judge → critique
+- `src/quorate/local.py` — bounded workspace snapshots and fixed Codex/Gemini subscription routing
 - `src/quorate/benchmark.py` — fixed synthetic roster canaries and dated health snapshots
 - `src/quorate/cli.py` — cyclopts subcommand CLI with preset system
 
 ## Key Patterns
 
 - **Provider routing:** `_detect_provider()` → try a subscription CLI where available → native API → OpenRouter fallback
+- **Local workspace routing:** `--local --workspace <directory>` on quick, brainstorm, or council → validated text snapshot → exactly Codex CLI and Gemini through Antigravity, with no API or model-family fallback
 - **Claude via `claude --print`** (Max subscription, $0) — first route for Anthropic models
 - **GPT via `codex exec`** (Pro subscription, $0) — first route for OpenAI models, uses `model_reasoning_effort="xhigh"`
 - **Gemini via `agy --print`** (Antigravity subscription, $0) — first route for Google models
@@ -53,7 +55,9 @@ Council seat: Claude Opus 4.8. Judge: Claude Fable 5, with GPT-5.6 Sol through C
 ## Runtime expectations
 
 - `quorate quick` — 7 parallel queries; subscription routes get 120 seconds before fallback
+- `quorate quick --local --workspace <directory>` — fixed two-seat Codex/Gemini run; both seats must succeed
 - `quorate brainstorm` — 8 parallel generators, 8 parallel hybrids, then Fable curation
+- `quorate brainstorm --local --workspace <directory>` — two generators, two hybrids, then Codex curation with Gemini contract fallback
 - `quorate benchmark` — 3 sequential synthetic canaries across all 9 primary production roles
 - `quorate council --fast` — blind + judge only, skips debate + critic, **~2-3 min** (judge with HIGH reasoning effort dominates)
 - `quorate council` — full 4-phase deliberation, **5-8 min** (default), **12-15 min** with `--deep`
@@ -69,6 +73,8 @@ Council seat: Claude Opus 4.8. Judge: Claude Fable 5, with GPT-5.6 Sol through C
 - `codex exec` needs `-c 'model_reasoning_effort="xhigh"'` and `--skip-git-repo-check`
 - `codex exec` strips an OpenRouter-style `-pro` suffix. Use the actual Codex model ID, currently `gpt-5.6-sol`; quick mode requests medium reasoning while council retains the CLI's highest default when no effort is supplied.
 - The standalone Gemini CLI no longer supports the individual subscription client. Google models use Antigravity in sandboxed plan mode before falling back to Google AI Studio.
+- Local workspace mode never falls back: it uses only Codex CLI and Gemini through Antigravity, runs both from isolated temporary directories, and never passes either client the workspace path.
+- Local workspace snapshots are external disclosures. Select only public, synthetic, or deliberately sanitized directories; `QUORATE_PROTECTED_ROOTS` and the snapshot limits are guardrails, not content classification.
 - Thinking models need longer timeouts (180s+) in parallel execution
 - Scripted quick and council runs fail closed when fewer than a strict majority respond. Their error envelope retains partial responses plus sanitized route codes, never provider error prose.
 - Headless K3 calls require `KIMI_CODE_API_KEY`; never make a scheduled or piped run fall back to the interactive Kimi Code CLI.

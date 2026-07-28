@@ -70,11 +70,14 @@ quorate "What's the best database for time-series data?"
 
 # Read question from file
 quorate council /path/to/prompt.txt
+
+# Ground only Codex and Gemini in a sanitized workspace snapshot
+quorate quick "Summarize the architecture" --local --workspace ./public-demo
 ```
 
 ### Council options
 
-Council takes five flags — everything else is injected through the question or `--context`:
+Council's ordinary deliberation controls remain available in local mode:
 
 ```bash
 quorate council "question"                       # default: 1 debate round + critique (5-8 min)
@@ -82,6 +85,7 @@ quorate council "question" --fast                # skip debate + critique (~2-3 
 quorate council "question" --deep                # 2 debate rounds (12-15 min)
 quorate council "question" --persona ./founder.md  # all models answer as this principal (file path)
 quorate council "question" --context banking-frame.md  # inject regulatory/domain context
+quorate council "question" --local --workspace ./public-demo  # fixed two-seat local roster
 quorate council "question" --json                # force JSON envelope (auto when piped)
 ```
 
@@ -92,6 +96,26 @@ or `--domain` flag: use `--fast`/`--deep` for round count, and put regulatory fr
 question or a `--context` file. The presets (`redteam`, `premortem`, `oxford`, `discuss`) accept
 only `--context` and `--json`; `brainstorm` also accepts those two flags, while `--persona`
 is `council`/`quick` only.
+
+### Local workspace mode
+
+`quick`, `brainstorm`, and `council` accept `--local --workspace <directory>`.
+Both flags are required. Local means workspace-grounded, not locally hosted:
+Quorate still discloses the validated snapshot to two external subscription
+services. Codex CLI and Gemini through Antigravity are the only seats, and the
+local path never falls back to an API or another model family.
+
+Quorate resolves the workspace, rejects overlap with
+`QUORATE_PROTECTED_ROOTS`, rejects symbolic links and sensitive-looking
+credential files, and builds a bounded UTF-8 text snapshot. It then runs both
+clients from isolated temporary directories; neither receives the workspace
+path or direct filesystem access. With two seats, strict-majority quorum means
+both must succeed.
+
+Use a narrower directory when the 200-file, 64 KiB-per-file, or 128 KiB
+aggregate text limit is exceeded. Generated, dependency, cache, and binary
+contents are excluded. See [the local-mode design and acceptance
+criteria](docs/local-mode-design.md).
 
 ## Data boundary
 
@@ -111,6 +135,10 @@ export QUORATE_PROTECTED_ROOTS="$HOME/private-client:$HOME/private-personal"
 Question, context, and persona files beneath those roots are rejected, including symlinks that
 resolve into them. This is a guardrail for known directories; it cannot classify inline text or
 prove that a copied file has been safely sanitized.
+
+The same disclosure boundary applies to `--local`. A workspace must be public,
+synthetic, or deliberately sanitized before it is selected; the snapshot
+guardrails do not classify proprietary source code or personal data.
 
 ## API Keys
 

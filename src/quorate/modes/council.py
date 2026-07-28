@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from porin import stream_event
 from rich.console import Console
@@ -15,6 +15,7 @@ from quorate import runlog
 from quorate.api import query_judge, quorum_health, run_parallel
 from quorate.config import (
     Message,
+    ModelCallResult,
     ModelEntry,
     ReasoningEffort,
     is_error,
@@ -34,6 +35,33 @@ from quorate.prompts import (
 )
 
 CONFIDENCE_RE = re.compile(r"(?i)\*{0,2}Confidence\*{0,2}:?\s*(\d{1,2})\s*(?:/\s*10)")
+
+
+async def _query_single(
+    entry: ModelEntry,
+    messages: list[Message],
+    *,
+    max_tokens: int,
+    timeout: float,
+    effort: ReasoningEffort | None,
+) -> ModelCallResult:
+    """Query one standard provider-routed seat for sequential debate."""
+    import httpx
+
+    from quorate.api import query_model
+    from quorate.config import api_keys
+
+    keys = api_keys()
+    async with httpx.AsyncClient() as client:
+        return await query_model(
+            client,
+            keys,
+            entry,
+            messages,
+            max_tokens=max_tokens,
+            timeout=timeout,
+            effort=effort,
+        )
 
 
 def _sanitize(content: str) -> str:
@@ -108,6 +136,11 @@ async def run_council(
     prune_cot_enabled: bool = False,
     console: Console | None = None,
     json_output: bool = False,
+    parallel_runner: Callable[..., Awaitable[list[ModelCallResult]]] | None = None,
+    model_runner: Callable[..., Awaitable[ModelCallResult]] | None = None,
+    judge_runner: Callable[..., Awaitable[str]] | None = None,
+    judge_fallback_model: str | None = None,
+    critic_fallback_model: str | None = None,
 ) -> str | dict[str, Any]:
     """Run full council deliberation: blind → debate → judge → critique.
 
@@ -121,9 +154,12 @@ async def run_council(
         console = console or Console()
     models = models or resolved_council()
     judge = resolved_judge(judge_model)
-    judge_fallback = resolved_judge_fallback()
+    judge_fallback = judge_fallback_model or resolved_judge_fallback()
     critique = resolved_critique(critic_model)
-    critique_fallback = resolved_critique_fallback()
+    critique_fallback = critic_fallback_model or resolved_critique_fallback()
+    run_models = parallel_runner or run_parallel
+    run_model = model_runner or _query_single
+    run_judge = judge_runner or query_judge
 
     full_question = f"{context}\n\n{question}" if context else question
     start = time.monotonic()
@@ -135,7 +171,7 @@ async def run_council(
     console.print("\n[bold cyan]BLIND PHASE[/bold cyan]")
     blind_messages = [Message.system(BLIND_SYSTEM), Message.user(full_question)]
 
-    blind_results = await run_parallel(
+    blind_results = await run_models(
         models, blind_messages, max_tokens=1024, timeout=timeout, effort=effort
     )
 
@@ -213,17 +249,14 @@ async def run_council(
                 Message.user(f"{context_block}\n\nOriginal question: {full_question}"),
             ]
 
-            # Query this speaker sequentially (debate is sequential)
-            import httpx
-
-            from quorate.api import query_model
-            from quorate.config import api_keys
-
-            keys = api_keys()
-            async with httpx.AsyncClient() as client:
-                mcr = await query_model(
-                    client, keys, entry, msgs, max_tokens=2048, timeout=timeout, effort=effort
-                )
+            # Query this speaker sequentially (debate is sequential).
+            mcr = await run_model(
+                entry,
+                msgs,
+                max_tokens=2048,
+                timeout=timeout,
+                effort=effort,
+            )
 
             entry_dict = mcr.to_dict()
             entry_dict["round"] = round_num
@@ -272,7 +305,7 @@ async def run_council(
         Message.system(judge_prompt),
         Message.user(f"Question: {full_question}\n\n{all_text}"),
     ]
-    judge_response = await query_judge(
+    judge_response = await run_judge(
         judge, judge_messages, max_tokens=16384, timeout=300, effort=ReasoningEffort.HIGH
     )
 
@@ -282,7 +315,7 @@ async def run_council(
             "[yellow]Preferred judge failed; trying subscription fallback "
             f"{judge_fallback}.[/yellow]"
         )
-        judge_response = await query_judge(
+        judge_response = await run_judge(
             judge_fallback,
             judge_messages,
             max_tokens=16384,
@@ -325,7 +358,7 @@ async def run_council(
             Message.system(CRITIQUE_SYSTEM),
             Message.user(f"Question: {full_question}\n\nJudge synthesis:\n{judge_response}"),
         ]
-        critique_response = await query_judge(
+        critique_response = await run_judge(
             critique, critique_messages, max_tokens=4096, timeout=120
         )
         critique_used = critique
@@ -334,7 +367,7 @@ async def run_council(
                 "[yellow]Preferred critic failed; trying subscription fallback "
                 f"{critique_fallback}.[/yellow]"
             )
-            critique_response = await query_judge(
+            critique_response = await run_judge(
                 critique_fallback,
                 critique_messages,
                 max_tokens=4096,

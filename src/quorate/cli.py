@@ -58,6 +58,17 @@ _tree.add_command(
             "description": "Prune hedge/self-questioning text before judge",
         },
         {
+            "name": "--local",
+            "type": "boolean",
+            "default": False,
+            "description": "Use only Codex and Gemini over a sanitized workspace snapshot",
+        },
+        {
+            "name": "--workspace",
+            "type": "string",
+            "description": "Public, synthetic, or sanitized workspace; requires --local",
+        },
+        {
             "name": "--json",
             "type": "boolean",
             "default": False,
@@ -80,6 +91,17 @@ _tree.add_command(
             "name": "--persona",
             "type": "string",
             "description": "Public, synthetic, or sanitized persona file",
+        },
+        {
+            "name": "--local",
+            "type": "boolean",
+            "default": False,
+            "description": "Use only Codex and Gemini over a sanitized workspace snapshot",
+        },
+        {
+            "name": "--workspace",
+            "type": "string",
+            "description": "Public, synthetic, or sanitized workspace; requires --local",
         },
         {"name": "--json", "type": "boolean", "default": False},
     ],
@@ -134,6 +156,17 @@ _tree.add_command(
             "name": "--context",
             "type": "string",
             "description": "Non-sensitive context file(s) or text; repeatable",
+        },
+        {
+            "name": "--local",
+            "type": "boolean",
+            "default": False,
+            "description": "Use only Codex and Gemini over a sanitized workspace snapshot",
+        },
+        {
+            "name": "--workspace",
+            "type": "string",
+            "description": "Public, synthetic, or sanitized workspace; requires --local",
         },
         {"name": "--json", "type": "boolean", "default": False},
     ],
@@ -333,6 +366,27 @@ def _merge_persona_context(persona_text: str | None, context_text: str | None) -
     return persona_text or context_text
 
 
+def _resolve_local_runner(local: bool, workspace: str | None):
+    """Validate paired local-mode flags and construct the isolated runner."""
+    if local != bool(workspace):
+        Console().print("[red]--local and --workspace must be supplied together.[/red]")
+        raise SystemExit(1)
+    if not local:
+        return None
+
+    from quorate.local import LocalRunner, WorkspaceBoundaryError, build_workspace_snapshot
+
+    try:
+        snapshot = build_workspace_snapshot(
+            workspace or "",
+            protected_roots=_configured_protected_roots(),
+        )
+    except WorkspaceBoundaryError as exc:
+        Console().print(f"[red]Refusing local workspace:[/red] {exc}")
+        raise SystemExit(1) from exc
+    return LocalRunner(snapshot)
+
+
 def _emit_result(command: str, result: str | dict | None, json_output: bool) -> None:
     """Emit result as porin envelope when in JSON mode."""
     if not json_output:
@@ -462,6 +516,8 @@ def quick(
     *,
     context: tuple[str, ...] = (),
     persona: str | None = None,
+    local: bool = False,
+    workspace: str | None = None,
     json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
 ) -> None:
     """Parallel queries — all models answer independently.
@@ -470,17 +526,21 @@ def quick(
     Persona and context must be public, synthetic, or deliberately sanitized.
     """
     json_output = json_output or _is_agent()
+    from quorate.local import local_models
     from quorate.modes.quick import run_quick
 
     text = _resolve_question(question)
     resolved_ctx = _merge_persona_context(_resolve_persona(persona), _resolve_context(context))
+    local_runner = _resolve_local_runner(local, workspace)
     console = Console(quiet=json_output)
     result = asyncio.run(
         run_quick(
             text,
             context=resolved_ctx,
+            models=local_models() if local_runner else None,
             console=console,
             json_output=json_output,
+            parallel_runner=local_runner.run_parallel if local_runner else None,
         )
     )
     _emit_result("quorate quick", result, json_output)
@@ -564,21 +624,30 @@ def brainstorm(
     question: str | None = None,
     *,
     context: tuple[str, ...] = (),
+    local: bool = False,
+    workspace: str | None = None,
     json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
 ) -> None:
     """Generate independently, cross-pollinate once, then curate a shortlist."""
     json_output = json_output or _is_agent()
+    from quorate.local import CODEX_ENTRY, GEMINI_ENTRY, local_models
     from quorate.modes.brainstorm import run_brainstorm
 
     text = _resolve_question(question)
     resolved_ctx = _resolve_context(context)
+    local_runner = _resolve_local_runner(local, workspace)
     console = Console(quiet=json_output)
     result = asyncio.run(
         run_brainstorm(
             text,
             context=resolved_ctx,
+            models=local_models() if local_runner else None,
             console=console,
             json_output=json_output,
+            prompt_round_runner=local_runner.run_prompt_round if local_runner else None,
+            judge_runner=local_runner.query_judge if local_runner else None,
+            curator_model=CODEX_ENTRY.model if local_runner else None,
+            curator_fallback_model=GEMINI_ENTRY.model if local_runner else None,
         )
     )
     _emit_result("quorate brainstorm", result, json_output)
@@ -594,6 +663,8 @@ def council(
     fast: bool = False,
     shuffle_traces: bool = False,
     prune_cot: bool = False,
+    local: bool = False,
+    workspace: str | None = None,
     json_output: Annotated[bool, cyclopts.Parameter(name="--json")] = False,
 ) -> None:
     """Full deliberation — blind phase, debate, judge synthesis, critique.
@@ -605,10 +676,12 @@ def council(
     Persona and context must be public, synthetic, or deliberately sanitized.
     """
     json_output = json_output or _is_agent()
+    from quorate.local import CODEX_ENTRY, GEMINI_ENTRY, local_models
     from quorate.modes.council import run_council
 
     text = _resolve_question(question)
     resolved_ctx = _merge_persona_context(_resolve_persona(persona), _resolve_context(context))
+    local_runner = _resolve_local_runner(local, workspace)
     if fast:
         rounds = 0
     elif deep:
@@ -620,12 +693,20 @@ def council(
         run_council(
             text,
             context=resolved_ctx,
+            models=local_models() if local_runner else None,
             rounds=rounds,
+            judge_model=CODEX_ENTRY.model if local_runner else None,
+            critic_model=GEMINI_ENTRY.model if local_runner else None,
             no_critic=fast,
             shuffle_traces_enabled=shuffle_traces,
             prune_cot_enabled=prune_cot,
             console=console,
             json_output=json_output,
+            parallel_runner=local_runner.run_parallel if local_runner else None,
+            model_runner=local_runner.query_model if local_runner else None,
+            judge_runner=local_runner.query_judge if local_runner else None,
+            judge_fallback_model=GEMINI_ENTRY.model if local_runner else None,
+            critic_fallback_model=CODEX_ENTRY.model if local_runner else None,
         )
     )
     _emit_result("quorate council", result, json_output)

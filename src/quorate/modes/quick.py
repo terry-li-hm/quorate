@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -11,7 +11,7 @@ from rich.panel import Panel
 
 from quorate import runlog
 from quorate.api import quorum_health, run_parallel
-from quorate.config import Message, ModelEntry, ReasoningEffort, quick_models
+from quorate.config import Message, ModelCallResult, ModelEntry, ReasoningEffort, quick_models
 
 
 async def run_quick(
@@ -22,6 +22,7 @@ async def run_quick(
     effort: ReasoningEffort | None = None,
     console: Console | None = None,
     json_output: bool = False,
+    parallel_runner: Callable[..., Awaitable[list[ModelCallResult]]] | None = None,
 ) -> str | dict[str, Any]:
     """Run quick parallel query across all models."""
     console = console or Console()
@@ -33,7 +34,8 @@ async def run_quick(
     start = time.monotonic()
 
     effective_effort = effort or ReasoningEffort.MEDIUM
-    results = await run_parallel(
+    run_models = parallel_runner or run_parallel
+    results = await run_models(
         models,
         messages,
         max_tokens=2048,
