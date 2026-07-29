@@ -228,7 +228,8 @@ for the divergent ideation architecture.
 
 On the Vivesca host, `scripts/monthly-benchmark.sh` is the non-interactive runner.
 It loads the locally resolved credential environment, uses subscription routes first,
-and records the rolling usage snapshot. If the Fireworks trial override is selected, it
+and records the rolling usage snapshot. It fails before any provider call if the
+headless Kimi credential is absent. If the Fireworks trial override is selected, it
 also requires the dedicated key and verifies that K3 itself passes all three canaries
 through `fireworks-us` without diagnostics and with the attested Priority request
 contract. A selected candidate that is absent from the report fails closed. The

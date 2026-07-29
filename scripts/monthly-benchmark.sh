@@ -14,6 +14,11 @@ set -a
 source "$resolved_env"
 set +a
 
+if [[ -z "${KIMI_CODE_API_KEY:-}" ]]; then
+  print -u2 "quorate monthly benchmark: KIMI_CODE_API_KEY is absent"
+  exit 1
+fi
+
 fireworks_us_model=accounts/fireworks/routers/kimi-k3-us
 fireworks_selected=0
 if [[ "${CONSILIUM_MODEL_M1:-}" == "$fireworks_us_model" \
