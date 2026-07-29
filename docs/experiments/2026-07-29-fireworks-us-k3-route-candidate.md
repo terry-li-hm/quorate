@@ -119,23 +119,26 @@ exception becomes sanitized failure evidence instead of aborting the report.
 
 The approved operator should run each live gate once. The Priority canary
 artifact is
-`/Users/terry/tmp/quorate-fireworks-k3-priority-v1-canary-2026-07-29.json`;
+`/Users/terry/tmp/quorate-fireworks-k3-priority-v1-canary.json`;
 create and validate it with:
 
 ```bash
+canary_artifact=/Users/terry/tmp/quorate-fireworks-k3-priority-v1-canary.json
+canary_error=/Users/terry/tmp/quorate-fireworks-k3-priority-v1-canary.err
+[[ ! -e "$canary_artifact" && ! -e "$canary_error" ]] || exit 1
+set -o noclobber
 CONSILIUM_MODEL_M4=accounts/fireworks/routers/kimi-k3-us \
   /Users/terry/.local/bin/quorate benchmark --timeout 90 --no-save --json \
-  > /Users/terry/tmp/quorate-fireworks-k3-priority-v1-canary-2026-07-29.json \
-  2> /Users/terry/tmp/quorate-fireworks-k3-priority-v1-canary-2026-07-29.err
+  > "$canary_artifact" 2> "$canary_error"
 /usr/bin/python3 scripts/check_fireworks_benchmark.py --required \
-  /Users/terry/tmp/quorate-fireworks-k3-priority-v1-canary-2026-07-29.json
+  "$canary_artifact"
 ```
 
 Only an attested 3-of-3 pass permits the paired assay:
 
 ```bash
 uv run python -m quorate.k3_route_assay --execute-live \
-  --output /Users/terry/tmp/quorate-k3-route-assay-2026-07-29-priority-v1.json
+  --output /Users/terry/tmp/quorate-k3-route-assay-priority-v1-seed-20260729.json
 ```
 
 Its implicit seed is the fixed seed above, it makes at most 80 synthetic model
