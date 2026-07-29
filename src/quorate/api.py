@@ -15,6 +15,9 @@ import httpx
 from quorate.config import (
     ANTHROPIC_URL,
     ANTHROPIC_VERSION,
+    FIREWORKS_URL,
+    FIREWORKS_US_K3_MODEL,
+    FIREWORKS_US_SERVICE_TIER,
     GOOGLE_AI_STUDIO_URL,
     KIMI_CODE_URL,
     OPENROUTER_URL,
@@ -52,8 +55,16 @@ def _diagnostic_code(content: str) -> str:
         return "timeout"
     if "invalid json" in lower:
         return "invalid_json"
+    if "invalid response" in lower:
+        return "invalid_response"
+    if "transport failure" in lower:
+        return "transport_error"
+    if "truncated response" in lower:
+        return "truncated_response"
     if "no response" in lower or "empty" in lower:
         return "empty_response"
+    if "unsupported fireworks us route" in lower:
+        return "unsupported_model"
     if "not found" in lower or "no such file" in lower:
         return "unavailable"
     return "provider_error"
@@ -152,6 +163,94 @@ async def _kimi_code_api(
     choices = data.get("choices", [])
     content = ((choices[0].get("message") or {}).get("content") or "").strip() if choices else ""
     text = _strip_think(content) if content else f"[No response from Kimi Code API {bare}]"
+    return text, tokens
+
+
+async def _fireworks_us_api(
+    client: httpx.AsyncClient,
+    api_key: str,
+    model: str,
+    messages: list[Message],
+    max_tokens: int,
+    timeout: float,
+    effort: ReasoningEffort | None,
+) -> ProviderResult:
+    """Query K3 through Fireworks' exact US-only router."""
+    if model != FIREWORKS_US_K3_MODEL:
+        return f"[Error: Unsupported Fireworks US route {model}]", None
+    # Fireworks documents reasoning_effort generally but not K3's accepted
+    # values or semantics. Use K3's server-side default until a live canary
+    # establishes a safe model-specific control.
+    del effort
+    body: dict = {
+        "model": model,
+        "messages": [message.to_dict() for message in messages],
+        "max_tokens": max_tokens,
+        "context_length_exceeded_behavior": "error",
+        # Fireworks documents Priority as the higher-reliability serving path
+        # during peak traffic. K3 US supports it without changing the router.
+        "service_tier": FIREWORKS_US_SERVICE_TIER,
+    }
+    try:
+        response = await client.post(
+            FIREWORKS_URL,
+            headers={"Authorization": f"Bearer {api_key}"},
+            json=body,
+            timeout=timeout,
+        )
+    except httpx.TimeoutException:
+        return f"[Error: Fireworks US request timed out for {model}]", None
+    except httpx.RequestError:
+        return f"[Error: Fireworks US transport failure for {model}]", None
+    if response.status_code != 200:
+        return f"[Error: HTTP {response.status_code} from Fireworks US {model}]", None
+    try:
+        data = response.json()
+    except ValueError:
+        return f"[Error: Invalid JSON from Fireworks US {model}]", None
+    if not isinstance(data, dict):
+        return f"[Error: Invalid response from Fireworks US {model}]", None
+    if "error" in data:
+        return f"[Error: Fireworks US provider error for {model}]", None
+    usage = data.get("usage")
+    if usage is not None and not isinstance(usage, dict):
+        return f"[Error: Invalid response from Fireworks US {model}]", None
+    prompt_tokens = usage.get("prompt_tokens") if usage else None
+    completion_tokens = usage.get("completion_tokens") if usage else None
+    for value in (prompt_tokens, completion_tokens):
+        if value is not None and (
+            not isinstance(value, int) or isinstance(value, bool) or value < 0
+        ):
+            return f"[Error: Invalid response from Fireworks US {model}]", None
+    tokens = (
+        {
+            "tokens_in": prompt_tokens,
+            "tokens_out": completion_tokens,
+        }
+        if usage is not None
+        else None
+    )
+    choices = data.get("choices", [])
+    if not isinstance(choices, list):
+        return f"[Error: Invalid response from Fireworks US {model}]", None
+    if not choices:
+        return f"[No response from Fireworks US {model}]", tokens
+    choice = choices[0]
+    if not isinstance(choice, dict):
+        return f"[Error: Invalid response from Fireworks US {model}]", None
+    finish_reason = choice.get("finish_reason")
+    if finish_reason is not None and not isinstance(finish_reason, str):
+        return f"[Error: Invalid response from Fireworks US {model}]", None
+    if finish_reason in {"length", "context_length_exceeded"}:
+        return f"[Error: Truncated response from Fireworks US {model}]", tokens
+    message = choice.get("message")
+    if not isinstance(message, dict):
+        return f"[Error: Invalid response from Fireworks US {model}]", None
+    content = message.get("content")
+    if content is not None and not isinstance(content, str):
+        return f"[Error: Invalid response from Fireworks US {model}]", None
+    content = (content or "").strip()
+    text = _strip_think(content) if content else f"[No response from Fireworks US {model}]"
     return text, tokens
 
 
@@ -672,6 +771,8 @@ async def _zhipu(
 
 def _detect_provider(model: str) -> str:
     """Detect native provider from model ID."""
+    if model.startswith("accounts/fireworks/"):
+        return "fireworks"
     if model.startswith("kimi-code/"):
         return "kimi-code"
     if "anthropic/" in model or "claude" in model:
@@ -734,6 +835,26 @@ async def query_model(
         )
 
     # Try native provider
+    if provider == "fireworks":
+        fireworks_key = keys.get("fireworks")
+        if fireworks_key:
+            content, tokens = await _fireworks_us_api(
+                client,
+                fireworks_key,
+                entry.model,
+                messages,
+                max_tokens,
+                _remaining_timeout(),
+                effort,
+            )
+            if not is_error(content):
+                return _result(content, "fireworks-us", tokens)
+            _record_failure("fireworks-us", content)
+            return _result(f"[Error: Fireworks US failed for {entry.name}]", "none", tokens)
+        else:
+            _record_missing("fireworks-us")
+        return _result(f"[Error: Fireworks US failed for {entry.name}]", "none")
+
     if provider == "kimi-code":
         kimi_code_key = keys.get("kimi_code")
         if kimi_code_key:
@@ -955,6 +1076,8 @@ async def query_judge(
     keys = api_keys()
     provider = _detect_provider(model)
     async with httpx.AsyncClient() as client:
+        if provider == "fireworks":
+            return "[Error: Fireworks US is restricted to member seats]"
         if provider == "google":
             content, _ = await _antigravity_prompt(model, messages, timeout, effort)
             if not is_error(content):

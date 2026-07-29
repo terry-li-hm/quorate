@@ -5,14 +5,25 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import time
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import mean
 from typing import Any, Callable, Sequence
 
+from quorate import runlog
 from quorate.api import run_parallel
-from quorate.config import Message, ModelCallResult, ModelEntry, ReasoningEffort, benchmark_models
+from quorate.config import (
+    FIREWORKS_US_CLIENT_CONTRACT,
+    FIREWORKS_US_K3_MODEL,
+    FIREWORKS_US_SERVICE_TIER,
+    Message,
+    ModelCallResult,
+    ModelEntry,
+    ReasoningEffort,
+    benchmark_models,
+)
 
 SUITE_VERSION = "2026-07-16"
 
@@ -113,6 +124,11 @@ def _summarize_models(
         }
         if diagnostics:
             summary["diagnostics"] = diagnostics
+        if entry.model == FIREWORKS_US_K3_MODEL:
+            summary["request_contract"] = {
+                "client_contract": FIREWORKS_US_CLIENT_CONTRACT,
+                "requested_service_tier": FIREWORKS_US_SERVICE_TIER,
+            }
         summaries.append(summary)
     return summaries
 
@@ -134,15 +150,19 @@ async def run_benchmark(
     canaries: Sequence[Canary] = CANARIES,
     timeout: float = 90,
     save: bool = True,
+    log_usage: bool = True,
     snapshot_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Run fixed synthetic canaries and return a roster health report.
 
-    The report deliberately excludes model response text. It records only route,
-    latency, deterministic pass state, and safe diagnostics.
+    The report deliberately excludes model response text. It records route,
+    latency, deterministic pass state, safe diagnostics, token usage, and
+    estimated cost.
     """
     resolved_models = models or benchmark_models()
+    started = time.monotonic()
     attempts: list[dict[str, Any]] = []
+    call_results: list[ModelCallResult] = []
     canary_summaries: list[dict[str, Any]] = []
     quorum_target = max(2, len(resolved_models) // 2 + 1)
 
@@ -151,9 +171,10 @@ async def run_benchmark(
             resolved_models,
             [Message.user(canary.prompt)],
             max_tokens=256,
-            timeout=max(timeout, 180),
+            timeout=timeout,
             effort=ReasoningEffort.MEDIUM,
         )
+        call_results.extend(results)
         rows = [_attempt_row(canary, result) for result in results]
         attempts.extend(rows)
         reachable_count = sum(bool(row["reachable"]) for row in rows)
@@ -184,8 +205,13 @@ async def run_benchmark(
         status = "healthy"
         action = "Keep the roster. Reconsider only when external and local evidence agree."
 
+    record = runlog.build_record(
+        mode="benchmark",
+        results=call_results,
+        total_duration_s=time.monotonic() - started,
+    )
     report: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "suite_version": SUITE_VERSION,
         "ts": dt.datetime.now(dt.timezone.utc).isoformat(),
         "status": status,
@@ -195,7 +221,11 @@ async def run_benchmark(
         "models": model_summaries,
         "weak_seats": weak_seats,
         "recommended_action": action,
+        "estimated_api_cost_usd": round(record.est_cost_usd, 4),
+        "model_usage": record.model_usage,
     }
     if save:
         save_report(report, snapshot_dir)
+    if log_usage:
+        runlog.append(record)
     return report

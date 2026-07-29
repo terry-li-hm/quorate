@@ -38,6 +38,16 @@ Brainstorm mode uses the six council families plus Gemini 3.5 Flash and MiniMax 
 
 Any seat is overridable via `CONSILIUM_MODEL_M1`…`M6`, `CONSILIUM_MODEL_JUDGE`, `CONSILIUM_MODEL_JUDGE_FALLBACK`, `CONSILIUM_MODEL_CRITIQUE`, and `CONSILIUM_MODEL_CRITIQUE_FALLBACK`.
 
+Fireworks' exact US-only K3 router is implemented as an inactive candidate.
+Selecting `accounts/fireworks/routers/kimi-k3-us` calls Fireworks directly and
+requests its documented Priority serving tier for higher reliability. It fails
+closed and never falls through to OpenRouter, Kimi, another Fireworks model, or
+the Standard serving tier. It is restricted to a member seat and cannot be
+selected as judge or critic. The default K3 seat remains the Kimi Code
+membership route until the candidate completes its route assay and canary gate.
+Saved canary evidence includes the requested-tier contract marker, so a Standard
+or unattested run cannot pass the exact-route checker.
+
 ## Usage
 
 ```bash
@@ -153,9 +163,11 @@ export OPENAI_API_KEY="..."           # GPT (fallback if no Codex CLI)
 export OPENROUTER_API_KEY="..."       # DeepSeek and API fallback routes
 export KIMI_CODE_API_KEY="..."        # K3 through the documented membership API
 export QUORATE_OPENROUTER_KEY="..."   # Dedicated OpenRouter key (takes priority)
+export FIREWORKS_API_KEY="..."        # Optional Fireworks US K3 candidate
+export QUORATE_FIREWORKS_KEY="..."    # Dedicated Fireworks key (takes priority)
 ```
 
-GPT-5.6 Sol uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, and Gemini uses Antigravity (`agy --print`). K3 prefers Kimi's documented membership API with Quorate's real `User-Agent`; the official Kimi Code CLI is available only for a human-run interactive terminal. Headless and scheduled runs fail closed when `KIMI_CODE_API_KEY` is absent instead of simulating interactive use. These routes use their respective subscriptions at zero marginal cost. Each subscription CLI receives an allowlisted environment without unrelated provider credentials and runs from a temporary workspace; Claude has no tools, Codex is read-only, and Antigravity uses sandboxed plan mode. GPT, Claude, and Gemini can fall back to a direct API and then OpenRouter. Telemetry records the model and route actually used, and subscription-backed calls are not priced as API usage.
+GPT-5.6 Sol uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, and Gemini uses Antigravity (`agy --print`). K3 prefers Kimi's documented membership API with Quorate's real `User-Agent`; the official Kimi Code CLI is available only for a human-run interactive terminal. Headless and scheduled runs fail closed when `KIMI_CODE_API_KEY` is absent instead of simulating interactive use. The dormant Fireworks candidate likewise requires a key and accepts only `accounts/fireworks/routers/kimi-k3-us` through Chat Completions. These routes use their respective subscriptions at zero marginal cost except Fireworks, which is metered. Each subscription CLI receives an allowlisted environment without unrelated provider credentials and runs from a temporary workspace; Claude has no tools, Codex is read-only, and Antigravity uses sandboxed plan mode. GPT, Claude, and Gemini can fall back to a direct API and then OpenRouter. Telemetry records the model and route actually used, and subscription-backed calls are not priced as API usage.
 
 The [subscription CLI isolation audit](docs/experiments/2026-07-17-subscription-cli-isolation.md)
 records the ambient-authority finding, containment changes, and live route verification.
@@ -172,7 +184,9 @@ one role, route, and harness; a Quorate pass never approves a model for coding o
 including the critic, for route availability,
 strict structured output, and simple deterministic reasoning. It stores no response
 text. Dated snapshots under `~/.local/state/quorate/benchmarks/` contain only the
-route used, latency, pass state, and safe diagnostics.
+route used, latency, pass state, safe diagnostics, token usage, and estimated
+cost. `--timeout` is the requested per-route limit; thinking models receive at
+least 180 seconds.
 
 Treat Artificial Analysis as the broad screening layer for intelligence, cost,
 speed, and provider performance. Cross-check material changes against a task-specific
@@ -181,7 +195,12 @@ canaries before changing a seat. One failed seat is tolerated when every canary 
 has a strict-majority quorum. Quorate never edits its own roster from benchmark output.
 
 `quorate usage --days 30` summarizes the response-free run log by model, route,
-reachability, mean and p95 latency, and estimated API cost. It writes a dated snapshot under
+reachability, mean and p95 latency, and estimated API cost. Its separate model-usage rows
+attribute reachability, latency, safe diagnostics, calls, tokens, and estimated cost to
+the route, including council debate, brainstorm cross-pollination, and benchmark calls.
+The `natural_model_usage` view excludes benchmark records so synthetic passes cannot mask
+operational failures during a trial.
+It writes a dated snapshot under
 `~/.local/state/quorate/usage/`. The monthly roster job records this snapshot without invoking
 another model. Interactive councils ask for categorical alignment, decision-value, and K3-effect
 ratings while retaining no question, response, rationale, or free-text note. Usage snapshots
@@ -199,6 +218,8 @@ for the Kimi-seat replacement, the
 for the deliberately inconclusive downstream follow-up, and the
 [2026-07-17 Kimi subscription terms review](docs/experiments/2026-07-17-kimi-subscription-terms.md)
 for the membership boundary and API-route decision, the
+[2026-07-29 Fireworks US K3 route candidate](docs/experiments/2026-07-29-fireworks-us-k3-route-candidate.md)
+for the dormant direct-route contract and predeclared admission gate, the
 [2026-07-16 DeepSeek seat selection](docs/experiments/2026-07-16-deepseek-seat-selection.md)
 for the evidence behind the sixth council seat, and the
 [2026-07-16 brainstorm mode validation](docs/experiments/2026-07-16-brainstorm-mode.md)
@@ -206,7 +227,11 @@ for the divergent ideation architecture.
 
 On the Vivesca host, `scripts/monthly-benchmark.sh` is the non-interactive runner.
 It loads the locally resolved credential environment, uses subscription routes first,
-records the rolling usage snapshot, and stays silent when the roster is healthy. The corresponding LaunchAgent runs at
+and records the rolling usage snapshot. If the Fireworks trial override is selected, it
+also requires the dedicated key and verifies that K3 itself passes all three canaries
+through `fireworks-us` without diagnostics and with the attested Priority request
+contract. A selected candidate that is absent from the report fails closed. The
+runner otherwise stays silent when the roster is healthy. The corresponding LaunchAgent runs at
 09:00 on the first day of each month and writes only degraded or failed output to
 `~/logs/quorate-monthly-benchmark.log`.
 

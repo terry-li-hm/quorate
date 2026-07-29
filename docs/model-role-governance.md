@@ -36,3 +36,27 @@ Continue only when K3 remains admitted to at least one real role, usage is mater
 ## Current K3 disposition
 
 As of 17 July 2026, K3 is deployed as a trial in Quorate's Kimi family seat, which supplies its council and brainstorm uses. Its blind-phase role assay passed, and its membership API route passed all three fixed canaries without fallback diagnostics after the guarded entry point was restored. Its controlled downstream replay was inconclusive and response-free telemetry contains no natural K3 run yet. Interactive councils now collect categorical decision-value and K3-effect signals without retaining prose. Promote the seat to production status only after natural use supports its reliability and role value. K3 did not pass Vivesca's coding-route contract and is not admitted there. It is not admitted to mTOR; a non-coding challenger or reviewer role remains a candidate that requires its own gate.
+
+## Fireworks US route candidate
+
+As of 29 July 2026, Quorate has dormant client support for Fireworks'
+`accounts/fireworks/routers/kimi-k3-us`, but the Kimi membership API remains the
+default K3 route. The candidate accepts only Fireworks' Chat Completions endpoint
+through its Priority serving tier and fails closed without falling through to
+another model, provider, region, or serving tier. It is restricted to a member
+seat, is rejected as a judge or critic, and does not participate in `--local`.
+
+Fireworks documents the router as serving inference exclusively in the United
+States and documents default zero data retention for open-model prompts and
+generations. Those product controls do not broaden Quorate's disclosure
+boundary. Prompt caching can retain content transiently in volatile memory,
+request metadata is logged, and the reviewed public terms and DPA do not provide
+an express blanket US-residency covenant. A regulated residency requirement
+therefore needs a binding order form or MSA.
+
+The route is not admitted to trial until it passes the predeclared same-K3 route
+assay and then passes all three fixed canaries itself through `fireworks-us`
+without diagnostics. Overall council quorum is not enough. See the
+[Fireworks US K3 candidate note](experiments/2026-07-29-fireworks-us-k3-route-candidate.md)
+for the locked criteria, credential gate, and unresolved reasoning-control
+question.

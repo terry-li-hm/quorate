@@ -213,6 +213,14 @@ async def run_brainstorm(
 
     success_count, quorum_target, quorum_achieved = quorum_health(seed_results)
     if not quorum_achieved:
+        duration = time.monotonic() - start
+        runlog.append(
+            runlog.build_record(
+                mode="brainstorm",
+                results=seed_results,
+                total_duration_s=duration,
+            )
+        )
         result: dict[str, Any] = {
             "question": question,
             "phases": {"generation": seed_json},
@@ -220,7 +228,7 @@ async def run_brainstorm(
             "failed_count": len(seed_results) - success_count,
             "quorum_target": quorum_target,
             "quorum_achieved": False,
-            "duration_s": round(time.monotonic() - start, 1),
+            "duration_s": round(duration, 1),
         }
         return result if json_output else ""
 
@@ -301,6 +309,16 @@ async def run_brainstorm(
     if not _valid_curation(curated):
         curated = "[Error: Curator response did not include the required sections]"
         console.print(f"[red]{curated}[/red]")
+        duration = time.monotonic() - start
+        runlog.append(
+            runlog.build_record(
+                mode="brainstorm",
+                results=seed_results,
+                extra_results=cross_results,
+                total_duration_s=duration,
+                judge_model=curator_used,
+            )
+        )
         if json_output:
             return {
                 "question": question,
@@ -314,7 +332,7 @@ async def run_brainstorm(
                 "failed_count": len(seed_results) - success_count,
                 "quorum_target": quorum_target,
                 "quorum_achieved": True,
-                "duration_s": round(time.monotonic() - start, 1),
+                "duration_s": round(duration, 1),
             }
         return ""
 

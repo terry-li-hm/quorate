@@ -10,6 +10,7 @@ from quorate.api import (
     _antigravity_model,
     _detect_provider,
     _diagnostic_code,
+    _fireworks_us_api,
     _kimi_cli_env,
     _kimi_code_api,
     _parse_kimi_stream,
@@ -35,6 +36,9 @@ class TestStripThink:
 
 
 class TestDetectProvider:
+    def test_fireworks(self):
+        assert _detect_provider("accounts/fireworks/routers/kimi-k3-us") == "fireworks"
+
     def test_kimi_code(self):
         assert _detect_provider("kimi-code/k3") == "kimi-code"
 
@@ -139,6 +143,381 @@ def test_kimi_code_api_uses_documented_endpoint_and_real_identity():
     assert asyncio.run(run()) == ("answer", {"tokens_in": 12, "tokens_out": 4})
 
 
+def test_fireworks_us_api_uses_exact_router_and_chat_completions():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == "https://api.fireworks.ai/inference/v1/chat/completions"
+        assert request.headers["authorization"] == "Bearer fireworks-key"
+        body = json.loads(request.content)
+        assert body == {
+            "model": "accounts/fireworks/routers/kimi-k3-us",
+            "messages": [{"role": "user", "content": "question"}],
+            "max_tokens": 128,
+            "context_length_exceeded_behavior": "error",
+            "service_tier": "priority",
+        }
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "reasoning_content": "private reasoning",
+                            "content": "answer",
+                        }
+                    }
+                ],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 4},
+            },
+        )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await _fireworks_us_api(
+                client,
+                "fireworks-key",
+                "accounts/fireworks/routers/kimi-k3-us",
+                [Message.user("question")],
+                128,
+                10,
+                ReasoningEffort.HIGH,
+            )
+
+    assert asyncio.run(run()) == ("answer", {"tokens_in": 12, "tokens_out": 4})
+
+
+def test_fireworks_us_api_reports_malformed_json_safely():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"not-json")
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await _fireworks_us_api(
+                client,
+                "fireworks-key",
+                "accounts/fireworks/routers/kimi-k3-us",
+                [Message.user("question")],
+                128,
+                10,
+                None,
+            )
+
+    result, tokens = asyncio.run(run())
+    assert _diagnostic_code(result) == "invalid_json"
+    assert tokens is None
+
+
+def test_fireworks_us_api_rejects_malformed_response_shape():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"choices": "not-a-list"})
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await _fireworks_us_api(
+                client,
+                "fireworks-key",
+                "accounts/fireworks/routers/kimi-k3-us",
+                [Message.user("question")],
+                128,
+                10,
+                None,
+            )
+
+    result, tokens = asyncio.run(run())
+    assert _diagnostic_code(result) == "invalid_response"
+    assert tokens is None
+
+
+def test_fireworks_us_api_rejects_malformed_usage_tokens():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "answer"}}],
+                "usage": {"prompt_tokens": "12", "completion_tokens": 4},
+            },
+        )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await _fireworks_us_api(
+                client,
+                "fireworks-key",
+                "accounts/fireworks/routers/kimi-k3-us",
+                [Message.user("question")],
+                128,
+                10,
+                None,
+            )
+
+    result, tokens = asyncio.run(run())
+    assert _diagnostic_code(result) == "invalid_response"
+    assert tokens is None
+
+
+def test_fireworks_us_api_treats_reasoning_only_response_as_empty():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "reasoning_content": "private reasoning",
+                            "content": "",
+                        }
+                    }
+                ]
+            },
+        )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await _fireworks_us_api(
+                client,
+                "fireworks-key",
+                "accounts/fireworks/routers/kimi-k3-us",
+                [Message.user("question")],
+                128,
+                10,
+                None,
+            )
+
+    result, tokens = asyncio.run(run())
+    assert _diagnostic_code(result) == "empty_response"
+    assert tokens is None
+
+
+def test_fireworks_us_api_fails_closed_on_truncated_final_content():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {"content": "partial answer"},
+                        "finish_reason": "length",
+                    }
+                ],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 128},
+            },
+        )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await _fireworks_us_api(
+                client,
+                "fireworks-key",
+                "accounts/fireworks/routers/kimi-k3-us",
+                [Message.user("question")],
+                128,
+                10,
+                None,
+            )
+
+    result, tokens = asyncio.run(run())
+    assert _diagnostic_code(result) == "truncated_response"
+    assert tokens == {"tokens_in": 12, "tokens_out": 128}
+
+
+def test_fireworks_us_api_sanitizes_provider_error_prose():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            400,
+            json={"error": {"message": "secret-like provider detail"}},
+        )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await _fireworks_us_api(
+                client,
+                "fireworks-key",
+                "accounts/fireworks/routers/kimi-k3-us",
+                [Message.user("question")],
+                128,
+                10,
+                None,
+            )
+
+    result, _ = asyncio.run(run())
+    assert result == ("[Error: HTTP 400 from Fireworks US accounts/fireworks/routers/kimi-k3-us]")
+    assert "secret-like" not in result
+
+
+def test_fireworks_us_api_sanitizes_transport_error_prose():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.RemoteProtocolError(
+            "secret-like transport detail",
+            request=request,
+        )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await _fireworks_us_api(
+                client,
+                "fireworks-key",
+                "accounts/fireworks/routers/kimi-k3-us",
+                [Message.user("question")],
+                128,
+                10,
+                None,
+            )
+
+    result, _ = asyncio.run(run())
+    assert _diagnostic_code(result) == "transport_error"
+    assert "secret-like" not in result
+
+
+def test_fireworks_namespace_rejects_non_us_model_without_fallback():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        raise AssertionError("Unsupported Fireworks model must not make a request")
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await api.query_model(
+                client,
+                {
+                    "fireworks": "fireworks-key",
+                    "openrouter": "fallback-key",
+                },
+                ModelEntry(
+                    "Kimi-K3",
+                    "accounts/fireworks/models/kimi-k3",
+                ),
+                [Message.user("question")],
+            )
+
+    result = asyncio.run(run())
+    assert result.provider == "none"
+    assert result.is_error
+    assert result.diagnostics == ("fireworks-us:unsupported_model",)
+
+
+def test_fireworks_us_route_fails_closed_without_key_even_if_openrouter_is_available():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        raise AssertionError("Fireworks US route must not fall through to OpenRouter")
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await api.query_model(
+                client,
+                {"openrouter": "fallback-key"},
+                ModelEntry(
+                    "Kimi-K3-US",
+                    "accounts/fireworks/routers/kimi-k3-us",
+                ),
+                [Message.user("question")],
+            )
+
+    result = asyncio.run(run())
+    assert result.provider == "none"
+    assert result.is_error
+    assert result.diagnostics == ("fireworks-us:no_credentials",)
+
+
+def test_fireworks_us_route_records_successful_provider_and_usage():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {"content": "answer"},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 4},
+            },
+        )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await api.query_model(
+                client,
+                {"fireworks": "fireworks-key"},
+                ModelEntry(
+                    "Kimi-K3-US",
+                    "accounts/fireworks/routers/kimi-k3-us",
+                ),
+                [Message.user("question")],
+            )
+
+    result = asyncio.run(run())
+    assert result.provider == "fireworks-us"
+    assert result.response == "answer"
+    assert result.tokens_in == 12
+    assert result.tokens_out == 4
+    assert result.diagnostics == ()
+
+
+def test_fireworks_us_route_fails_closed_after_http_error():
+    requests: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(str(request.url))
+        return httpx.Response(503)
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await api.query_model(
+                client,
+                {
+                    "fireworks": "fireworks-key",
+                    "openrouter": "fallback-key",
+                },
+                ModelEntry(
+                    "Kimi-K3-US",
+                    "accounts/fireworks/routers/kimi-k3-us",
+                ),
+                [Message.user("question")],
+            )
+
+    result = asyncio.run(run())
+    assert result.provider == "none"
+    assert result.is_error
+    assert result.diagnostics == ("fireworks-us:http_503",)
+    assert requests == ["https://api.fireworks.ai/inference/v1/chat/completions"]
+
+
+def test_fireworks_judge_route_is_rejected_as_out_of_role(monkeypatch):
+    monkeypatch.setattr(
+        api,
+        "api_keys",
+        lambda: {"fireworks": None, "openrouter": "fallback-key"},
+    )
+
+    result = asyncio.run(
+        api.query_judge(
+            "accounts/fireworks/routers/kimi-k3-us",
+            [Message.user("question")],
+        )
+    )
+
+    assert result == "[Error: Fireworks US is restricted to member seats]"
+
+
+def test_fireworks_judge_route_does_not_call_any_provider(monkeypatch):
+    monkeypatch.setattr(
+        api,
+        "api_keys",
+        lambda: {"fireworks": "fireworks-key", "openrouter": "fallback-key"},
+    )
+
+    async def fail_if_provider_called(*_args, **_kwargs):
+        raise AssertionError("Out-of-role Fireworks judge must not call a provider")
+
+    monkeypatch.setattr(api, "_fireworks_us_api", fail_if_provider_called)
+    monkeypatch.setattr(api, "_openrouter", fail_if_provider_called)
+
+    result = asyncio.run(
+        api.query_judge(
+            "accounts/fireworks/routers/kimi-k3-us",
+            [Message.user("question")],
+        )
+    )
+
+    assert result == "[Error: Fireworks US is restricted to member seats]"
+
+
 def test_headless_kimi_fails_closed_without_membership_api_key(monkeypatch):
     monkeypatch.setattr(api.sys.stdin, "isatty", lambda: False)
     monkeypatch.setattr(api.sys.stdout, "isatty", lambda: False)
@@ -165,10 +544,14 @@ def test_subscription_cli_environment_excludes_provider_secrets(monkeypatch):
     monkeypatch.setenv("PATH", "/bin")
     monkeypatch.setenv("OPENROUTER_API_KEY", "secret")
     monkeypatch.setenv("XAI_API_KEY", "secret")
+    monkeypatch.setenv("FIREWORKS_API_KEY", "secret")
+    monkeypatch.setenv("QUORATE_FIREWORKS_KEY", "secret")
     environment = _subscription_cli_env()
     assert environment["PATH"] == "/bin"
     assert "OPENROUTER_API_KEY" not in environment
     assert "XAI_API_KEY" not in environment
+    assert "FIREWORKS_API_KEY" not in environment
+    assert "QUORATE_FIREWORKS_KEY" not in environment
     assert _kimi_cli_env() == environment
 
 

@@ -49,7 +49,13 @@ def test_one_failed_seat_is_healthy(monkeypatch, tmp_path):
         return rows
 
     monkeypatch.setattr(benchmark, "run_parallel", fake_parallel)
-    report = asyncio.run(benchmark.run_benchmark(models=models, snapshot_dir=tmp_path))
+    report = asyncio.run(
+        benchmark.run_benchmark(
+            models=models,
+            snapshot_dir=tmp_path,
+            log_usage=False,
+        )
+    )
 
     assert report["status"] == "healthy"
     assert report["quorum_achieved"] is True
@@ -68,11 +74,39 @@ def test_missing_canary_quorum_is_unhealthy(monkeypatch):
         ]
 
     monkeypatch.setattr(benchmark, "run_parallel", fake_parallel)
-    report = asyncio.run(benchmark.run_benchmark(models=models, save=False))
+    report = asyncio.run(
+        benchmark.run_benchmark(
+            models=models,
+            save=False,
+            log_usage=False,
+        )
+    )
 
     assert report["status"] == "unhealthy"
     assert report["quorum_achieved"] is False
     assert all(canary["quorum_achieved"] is False for canary in report["canaries"])
+
+
+def test_benchmark_forwards_requested_timeout(monkeypatch):
+    model = ModelEntry("M0", "provider/m0")
+    timeouts = []
+
+    async def fake_parallel(entries, _messages, **kwargs):
+        timeouts.append(kwargs["timeout"])
+        return [_result(entry, "QUORATE_OK") for entry in entries]
+
+    monkeypatch.setattr(benchmark, "run_parallel", fake_parallel)
+    asyncio.run(
+        benchmark.run_benchmark(
+            models=[model],
+            canaries=(benchmark.CANARIES[0],),
+            timeout=37,
+            save=False,
+            log_usage=False,
+        )
+    )
+
+    assert timeouts == [37]
 
 
 def test_snapshot_is_idempotent_for_utc_date(tmp_path):
@@ -84,3 +118,54 @@ def test_snapshot_is_idempotent_for_utc_date(tmp_path):
     assert first == second
     assert len(list(tmp_path.glob("*.json"))) == 1
     assert json.loads(second.read_text())["status"] == "degraded"
+
+
+def test_benchmark_records_response_free_usage(monkeypatch):
+    models = [
+        ModelEntry(
+            "Kimi-K3-US",
+            "accounts/fireworks/routers/kimi-k3-us",
+        )
+    ]
+    responses = {
+        "exact-token": "QUORATE_OK",
+        "json-contract": '{"status":"ok","items":[1,2,3]}',
+        "simple-reasoning": "42",
+    }
+    call = 0
+    appended = []
+
+    async def fake_parallel(entries, _messages, **_kwargs):
+        nonlocal call
+        canary = benchmark.CANARIES[call]
+        call += 1
+        return [
+            ModelCallResult(
+                entry.name,
+                "kimi-k3-us",
+                responses[canary.id],
+                provider="fireworks-us",
+                tokens_in=100,
+                tokens_out=10,
+            )
+            for entry in entries
+        ]
+
+    monkeypatch.setattr(benchmark, "run_parallel", fake_parallel)
+    monkeypatch.setattr(benchmark.runlog, "append", appended.append)
+
+    report = asyncio.run(
+        benchmark.run_benchmark(
+            models=models,
+            save=False,
+        )
+    )
+
+    assert len(appended) == 1
+    assert report["model_usage"][0]["calls"] == 3
+    assert report["model_usage"][0]["providers"] == {"fireworks-us": 3}
+    assert report["estimated_api_cost_usd"] > 0
+    assert report["models"][0]["request_contract"] == {
+        "client_contract": "fireworks-us-k3-priority-v1",
+        "requested_service_tier": "priority",
+    }

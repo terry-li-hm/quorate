@@ -30,6 +30,7 @@ scripts/install-local.sh
 - **GPT via `codex exec`** (Pro subscription, $0) — first route for OpenAI models, uses `model_reasoning_effort="xhigh"`
 - **Gemini via `agy --print`** (Antigravity subscription, $0) — first route for Google models
 - **K3 via Kimi Code membership API** — documented third-party integration with a real `User-Agent`; the official CLI is interactive-only
+- **Fireworks US K3 candidate** — dormant exact-router client for `accounts/fireworks/routers/kimi-k3-us`; direct and fail-closed, never a fallback
 - **ZhiPu native** — direct API at `open.bigmodel.cn/api/coding/paas/v4` (coding plan, zero marginal-cost GLM-5.2)
 - **API keys via `op run`:** effector wrapper injects keys from `quorate.env.op` at startup — no 1Password code in Python
 - **Executable split:** `~/.local/bin/quorate` links to the effector; the effector calls `quorate-core` after injecting keys, preventing both credential bypass and wrapper recursion
@@ -78,5 +79,6 @@ Council seat: Claude Opus 4.8. Judge: Claude Fable 5, with GPT-5.6 Sol through C
 - Thinking models need longer timeouts (180s+) in parallel execution
 - Scripted quick and council runs fail closed when fewer than a strict majority respond. Their error envelope retains partial responses plus sanitized route codes, never provider error prose.
 - Headless K3 calls require `KIMI_CODE_API_KEY`; never make a scheduled or piped run fall back to the interactive Kimi Code CLI.
+- Fireworks K3 remains inactive until its route assay and exact-route canaries pass. Do not add it to the roster, enable a non-US Fireworks model, use the Responses API, or send `reasoning_effort` before a credentialed K3-specific smoke test.
 - Benchmark snapshots never persist response text and never edit the roster. A seat change requires external task-specific evidence, a valid role-specific assay, and healthy local canaries. Admission never transfers between roles; follow `docs/model-role-governance.md`.
 - Council runtime is dominated by sequential debate phase (~2-3 min for 6 speakers) + judge with 300s timeout — not a bug, just the design

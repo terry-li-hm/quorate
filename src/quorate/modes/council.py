@@ -74,6 +74,13 @@ def _sanitize(content: str) -> str:
     )
 
 
+def _has_successful_k3(results: list[ModelCallResult]) -> bool:
+    """Recognize K3 across the incumbent and Fireworks US route identities."""
+    return any(
+        result.model_id in {"k3", "kimi-k3-us"} and not result.is_error for result in results
+    )
+
+
 def _build_synthesis_text(
     blind_claims: dict[str, str],
     conversation: list[tuple[str, str]],
@@ -212,6 +219,13 @@ async def run_council(
             f"{quorum_target} required"
         )
         console.print(f"[red]{message}.[/red]")
+        runlog.append(
+            runlog.build_record(
+                mode="council",
+                results=blind_results,
+                total_duration_s=time.monotonic() - start,
+            )
+        )
         if json_output:
             result["error"] = message
             return result
@@ -223,6 +237,7 @@ async def run_council(
     )
     conversation: list[tuple[str, str]] = []
     debate_json: list[dict[str, Any]] = []
+    debate_results: list[ModelCallResult] = []
     for round_num in range(1, rounds + 1):
         console.print(f"\n[bold cyan]DEBATE ROUND {round_num}[/bold cyan]")
         challenger_idx = (round_num - 1) % len(models)
@@ -257,6 +272,7 @@ async def run_council(
                 timeout=timeout,
                 effort=effort,
             )
+            debate_results.append(mcr)
 
             entry_dict = mcr.to_dict()
             entry_dict["round"] = round_num
@@ -326,6 +342,15 @@ async def run_council(
 
     if is_error(judge_response):
         console.print(f"[red]Judge failed: {judge_response}[/red]")
+        runlog.append(
+            runlog.build_record(
+                mode="council",
+                results=blind_results,
+                extra_results=debate_results,
+                total_duration_s=time.monotonic() - start,
+                judge_model=judge_used,
+            )
+        )
         if json_output:
             result["phases"]["judge"] = {"model": judge_used, "error": judge_response}
             return result
@@ -396,11 +421,12 @@ async def run_council(
             f"\n[bold red]⚠ Partial council: {len(blind_failed)}/{len(blind_results)} models failed"
             f" ({names})[/bold red]"
         )
-    k3_present = any(result.model_id == "k3" and not result.is_error for result in blind_results)
+    k3_present = _has_successful_k3(blind_results)
     outcome, decision_value, k3_effect = runlog.prompt_outcome(k3_present=k3_present)
     record = runlog.build_record(
         mode="council",
         results=blind_results,
+        extra_results=debate_results,
         total_duration_s=duration,
         judge_model=judge_used,
         outcome=outcome,
@@ -408,7 +434,11 @@ async def run_council(
         k3_effect=k3_effect,
     )
     runlog.append(record)
-    footer_lines, summary = runlog.format_footer(blind_results, duration)
+    footer_lines, summary = runlog.format_footer(
+        blind_results,
+        duration,
+        extra_results=debate_results,
+    )
     console.print()
     for line in footer_lines:
         console.print(f"[dim]{line}[/dim]")

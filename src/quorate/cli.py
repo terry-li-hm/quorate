@@ -115,7 +115,9 @@ _tree.add_command(
             "name": "--timeout",
             "type": "number",
             "default": 90,
-            "description": "Per-route timeout in seconds",
+            "description": (
+                "Requested per-route timeout in seconds; thinking models use at least 180"
+            ),
         },
         {
             "name": "--no-save",
@@ -555,8 +557,10 @@ def benchmark(
 ) -> None:
     """Run fixed synthetic canaries across the current roster.
 
-    Responses are never persisted. The dated snapshot contains only route,
-    latency, deterministic pass state, and safe diagnostics.
+    Responses are never persisted. The dated snapshot contains route, latency,
+    deterministic pass state, safe diagnostics, token usage, and estimated cost.
+    Thinking models receive at least 180 seconds even when a lower timeout is
+    requested.
     """
     json_output = json_output or _is_agent()
     from quorate.benchmark import run_benchmark

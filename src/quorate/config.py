@@ -64,6 +64,10 @@ class ModelCallResult:
 # API endpoints
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 KIMI_CODE_URL = "https://api.kimi.com/coding/v1/chat/completions"
+FIREWORKS_URL = "https://api.fireworks.ai/inference/v1/chat/completions"
+FIREWORKS_US_K3_MODEL = "accounts/fireworks/routers/kimi-k3-us"
+FIREWORKS_US_SERVICE_TIER = "priority"
+FIREWORKS_US_CLIENT_CONTRACT = "fireworks-us-k3-priority-v1"
 GOOGLE_AI_STUDIO_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 ZHIPU_URL = "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions"
 XAI_URL = "https://api.x.ai/v1/chat/completions"
@@ -194,6 +198,8 @@ def _display_name(model_id: str) -> str:
                 result.append("MiMo")
             case "minimax":
                 result.append("MiniMax")
+            case "us":
+                result.append("US")
             case _:
                 result.append(part[0].upper() + part[1:])
     return "-".join(result)
@@ -230,6 +236,7 @@ THINKING_MODELS = {
     "glm-5.2",
     "glm-5.1",
     "kimi-k2.6",
+    "kimi-k3-us",
     "k3",
     "mimo-v2.5-pro",
     "minimax-m3",
@@ -283,6 +290,7 @@ def api_keys() -> dict[str, str | None]:
     return {
         "openrouter": _env("QUORATE_OPENROUTER_KEY") or _env("OPENROUTER_API_KEY"),
         "kimi_code": _env("KIMI_CODE_API_KEY"),
+        "fireworks": _env("QUORATE_FIREWORKS_KEY") or _env("FIREWORKS_API_KEY"),
         "google": _env("GOOGLE_API_KEY"),
         "zhipu": _env("ZHIPU_API_KEY"),
         "xai": _env("XAI_API_KEY"),

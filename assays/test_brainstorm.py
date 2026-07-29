@@ -52,12 +52,14 @@ def test_brainstorm_runs_two_rounds_then_curates(monkeypatch):
 
 def test_brainstorm_stops_before_cross_pollination_without_quorum(monkeypatch):
     models = _models()
+    appended = []
 
     async def fake_query_model(_client, _keys, entry, _messages, **_kwargs):
         response = "one seed" if entry.name == "Model-0" else "[Error: unavailable]"
         return ModelCallResult(entry.name, entry.model, response, provider="test")
 
     monkeypatch.setattr(brainstorm, "query_model", fake_query_model)
+    monkeypatch.setattr(brainstorm.runlog, "append", appended.append)
 
     result = asyncio.run(
         brainstorm.run_brainstorm(
@@ -71,6 +73,9 @@ def test_brainstorm_stops_before_cross_pollination_without_quorum(monkeypatch):
     assert isinstance(result, dict)
     assert result["quorum_achieved"] is False
     assert set(result["phases"]) == {"generation"}
+    assert len(appended) == 1
+    assert sum(row["calls"] for row in appended[0].model_usage) == 4
+    assert sum(row["reachable"] for row in appended[0].model_usage) == 1
 
 
 def test_brainstorm_falls_back_when_curator_misses_contract(monkeypatch):
@@ -101,3 +106,32 @@ def test_brainstorm_falls_back_when_curator_misses_contract(monkeypatch):
     assert isinstance(result, dict)
     assert result["phases"]["curation"]["model"] == "openai/gpt-5.6-sol"
     assert result["phases"]["curation"]["preferred_model"] == "anthropic/claude-fable-5"
+
+
+def test_brainstorm_logs_member_calls_when_all_curators_fail(monkeypatch):
+    models = _models()
+    appended = []
+
+    async def fake_query_model(_client, _keys, entry, _messages, **_kwargs):
+        return ModelCallResult(entry.name, entry.model, "ideas", provider="test")
+
+    async def fake_query_judge(*_args, **_kwargs):
+        return "invalid curation"
+
+    monkeypatch.setattr(brainstorm, "query_model", fake_query_model)
+    monkeypatch.setattr(brainstorm, "query_judge", fake_query_judge)
+    monkeypatch.setattr(brainstorm.runlog, "append", appended.append)
+
+    result = asyncio.run(
+        brainstorm.run_brainstorm(
+            "Invent a better archive",
+            models=models,
+            console=Console(quiet=True),
+            json_output=True,
+        )
+    )
+
+    assert isinstance(result, dict)
+    assert result["error"] == "Brainstorm curation failed its output contract"
+    assert len(appended) == 1
+    assert sum(row["calls"] for row in appended[0].model_usage) == 8

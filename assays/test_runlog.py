@@ -52,6 +52,9 @@ class TestPriceLookup:
     def test_minimax_m3(self):
         assert runlog.price_for("minimax/minimax-m3") == (0.30, 1.20)
 
+    def test_fireworks_kimi_k3_us_includes_us_priority_premium(self):
+        assert runlog.price_for("kimi-k3-us") == (4.125, 20.625)
+
 
 class TestEstimateCost:
     def test_grok43_basic(self):
@@ -106,6 +109,7 @@ class TestBuildRecord:
         assert d["total_tokens_out"] == 280
         assert d["total_duration_s"] == 12.5
         assert d["est_cost_usd"] > 0
+        assert len(d["model_usage"]) == 2
 
     def test_failed_model_marked(self):
         bad = _result(
@@ -182,6 +186,23 @@ class TestUsageReport:
         assert report["models"][0]["model_id"] == "k3"
         assert report["models"][0]["success_rate"] == 1.0
         assert report["models"][0]["providers"] == {"kimi-code": 1}
+        assert report["model_usage"] == [
+            {
+                "name": "K3",
+                "model_id": "k3",
+                "calls": 1,
+                "reachable": 1,
+                "tokens_in": 100,
+                "tokens_out": 200,
+                "est_cost_usd": 0.0,
+                "success_rate": 1.0,
+                "mean_latency_s": 12.0,
+                "p95_latency_s": 12.0,
+                "providers": {"kimi-code": 1},
+                "diagnostics": [],
+            }
+        ]
+        assert report["natural_model_usage"] == report["model_usage"]
         assert report["evaluations"] == {
             "rated_runs": 1,
             "outcome": {"inverted": 1},
@@ -196,6 +217,128 @@ class TestUsageReport:
     def test_rejects_non_positive_window(self):
         with pytest.raises(ValueError, match="at least 1"):
             runlog.usage_report(0)
+
+    def test_attributes_paid_extra_calls_to_model_and_route(self, tmp_path):
+        log = tmp_path / "runs.jsonl"
+        now = dt.datetime(2026, 7, 29, tzinfo=dt.timezone.utc)
+        blind = _result(
+            name="Kimi-K3-US",
+            model_id="kimi-k3-us",
+            provider="fireworks-us",
+            tokens_in=1_000_000,
+            tokens_out=1_000_000,
+        )
+        debate = _result(
+            name="Kimi-K3-US",
+            model_id="kimi-k3-us",
+            provider="fireworks-us",
+            tokens_in=2_000_000,
+            tokens_out=2_000_000,
+        )
+        record = runlog.build_record(
+            "council",
+            [blind],
+            total_duration_s=10,
+            extra_results=[debate],
+        ).to_dict()
+        record["ts"] = now.isoformat()
+        log.write_text(json.dumps(record) + "\n")
+
+        report = runlog.usage_report(30, path=log, now=now)
+
+        assert report["model_usage"] == [
+            {
+                "name": "Kimi-K3-US",
+                "model_id": "kimi-k3-us",
+                "calls": 2,
+                "reachable": 2,
+                "tokens_in": 3_000_000,
+                "tokens_out": 3_000_000,
+                "est_cost_usd": pytest.approx(74.25),
+                "success_rate": 1.0,
+                "mean_latency_s": 3.2,
+                "p95_latency_s": 3.2,
+                "providers": {"fireworks-us": 2},
+                "diagnostics": [],
+            }
+        ]
+
+    def test_extra_phase_failure_reduces_route_usage_success_rate(self):
+        blind = _result(
+            name="Kimi-K3-US",
+            model_id="kimi-k3-us",
+            provider="fireworks-us",
+        )
+        debate = _result(
+            name="Kimi-K3-US",
+            model_id="kimi-k3-us",
+            provider="none",
+            response="[Error: route unavailable]",
+            tokens_in=None,
+            tokens_out=None,
+            diagnostics=("fireworks-us:http_503",),
+        )
+
+        record = runlog.build_record(
+            "council",
+            [blind],
+            total_duration_s=10,
+            extra_results=[debate],
+        ).to_dict()
+
+        assert record["model_usage"] == [
+            {
+                "name": "Kimi-K3-US",
+                "model_id": "kimi-k3-us",
+                "calls": 2,
+                "reachable": 1,
+                "tokens_in": 100,
+                "tokens_out": 200,
+                "est_cost_usd": pytest.approx(0.0045),
+                "latencies_s": [3.2, 3.2],
+                "providers": {"fireworks-us": 1, "none": 1},
+                "diagnostics": ["fireworks-us:http_503"],
+            }
+        ]
+
+    def test_natural_usage_excludes_synthetic_benchmark_calls(self, tmp_path):
+        log = tmp_path / "runs.jsonl"
+        now = dt.datetime(2026, 7, 29, tzinfo=dt.timezone.utc)
+        benchmark_result = _result(
+            name="Kimi-K3-US",
+            model_id="kimi-k3-us",
+            provider="fireworks-us",
+        )
+        natural_failure = _result(
+            name="Kimi-K3-US",
+            model_id="kimi-k3-us",
+            provider="none",
+            response="[Error: route unavailable]",
+            tokens_in=None,
+            tokens_out=None,
+            diagnostics=("fireworks-us:http_503",),
+        )
+        benchmark_record = runlog.build_record(
+            "benchmark",
+            [benchmark_result],
+            total_duration_s=1,
+        ).to_dict()
+        natural_record = runlog.build_record(
+            "council",
+            [natural_failure],
+            total_duration_s=1,
+        ).to_dict()
+        benchmark_record["ts"] = now.isoformat()
+        natural_record["ts"] = now.isoformat()
+        log.write_text("\n".join((json.dumps(benchmark_record), json.dumps(natural_record))) + "\n")
+
+        report = runlog.usage_report(30, path=log, now=now)
+
+        assert report["model_usage"][0]["calls"] == 2
+        assert report["model_usage"][0]["success_rate"] == 0.5
+        assert report["natural_model_usage"][0]["calls"] == 1
+        assert report["natural_model_usage"][0]["success_rate"] == 0.0
+        assert report["natural_model_usage"][0]["diagnostics"] == ["fireworks-us:http_503"]
 
 
 class TestFormatFooter:

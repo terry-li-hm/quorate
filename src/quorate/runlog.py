@@ -38,6 +38,9 @@ PRICES: dict[str, tuple[float, float]] = {
     "grok-4.3": (3.00, 15.00),
     "grok-4.20-0309-reasoning": (3.00, 15.00),
     "kimi-k2.6": (0.66, 3.41),
+    # Fireworks K3 US Priority: input/output USD per 1M tokens. Cached-input
+    # pricing is not retained in ModelCallResult, so input remains conservative.
+    "kimi-k3-us": (4.125, 20.625),
     "glm-5.2": (0.9576, 3.0096),
     "glm-5.1": (0.0, 0.0),
     "mimo-v2.5-pro": (0.435, 0.87),
@@ -104,6 +107,7 @@ class RunRecord:
     total_tokens_in: int
     total_tokens_out: int
     est_cost_usd: float
+    model_usage: list[dict]
     outcome: str | None = None
     decision_value: str | None = None
     k3_effect: str | None = None
@@ -118,6 +122,7 @@ class RunRecord:
             "total_tokens_in": self.total_tokens_in,
             "total_tokens_out": self.total_tokens_out,
             "est_cost_usd": round(self.est_cost_usd, 4),
+            "model_usage": self.model_usage,
             "outcome": self.outcome,
             "decision_value": self.decision_value,
             "k3_effect": self.k3_effect,
@@ -137,6 +142,47 @@ def _model_row(result: ModelCallResult) -> dict:
     if result.diagnostics:
         row["diagnostics"] = list(result.diagnostics)
     return row
+
+
+def _aggregate_model_usage(results: Iterable[ModelCallResult]) -> list[dict]:
+    """Aggregate response-free token and cost telemetry by model and route."""
+    aggregates: dict[str, dict] = {}
+    for result in results:
+        key = result.model_id
+        row = aggregates.setdefault(
+            key,
+            {
+                "name": result.name,
+                "model_id": result.model_id,
+                "calls": 0,
+                "reachable": 0,
+                "tokens_in": 0,
+                "tokens_out": 0,
+                "est_cost_usd": 0.0,
+                "latencies_s": [],
+                "providers": Counter(),
+                "diagnostics": set(),
+            },
+        )
+        row["calls"] += 1
+        row["reachable"] += not result.is_error
+        row["tokens_in"] += result.tokens_in or 0
+        row["tokens_out"] += result.tokens_out or 0
+        row["est_cost_usd"] += estimate_cost(result)
+        row["latencies_s"].append(round(result.latency_s, 2))
+        row["providers"][result.provider] += 1
+        row["diagnostics"].update(result.diagnostics)
+    rows = []
+    for row in aggregates.values():
+        rows.append(
+            {
+                **row,
+                "est_cost_usd": round(row["est_cost_usd"], 4),
+                "providers": dict(sorted(row["providers"].items())),
+                "diagnostics": sorted(row["diagnostics"]),
+            }
+        )
+    return sorted(rows, key=lambda row: str(row["model_id"]))
 
 
 def build_record(
@@ -170,6 +216,7 @@ def build_record(
         total_tokens_in=total_in,
         total_tokens_out=total_out,
         est_cost_usd=cost,
+        model_usage=_aggregate_model_usage(all_results),
         outcome=outcome,
         decision_value=decision_value,
         k3_effect=k3_effect,
@@ -236,6 +283,63 @@ def _percentile_95(values: list[float]) -> float | None:
     return ordered[max(0, ceil(0.95 * len(ordered)) - 1)]
 
 
+def _accumulate_usage_rows(aggregates: dict[str, dict], usage_rows: Iterable[dict]) -> None:
+    """Merge response-free per-run model usage into rolling aggregates."""
+    for usage in usage_rows:
+        model_id = str(usage.get("model_id") or usage.get("name") or "unknown")
+        aggregate = aggregates.setdefault(
+            model_id,
+            {
+                "name": str(usage.get("name") or model_id),
+                "model_id": model_id,
+                "calls": 0,
+                "reachable": 0,
+                "tokens_in": 0,
+                "tokens_out": 0,
+                "est_cost_usd": 0.0,
+                "latencies_s": [],
+                "providers": Counter(),
+                "diagnostics": set(),
+            },
+        )
+        aggregate["calls"] += int(usage.get("calls") or 0)
+        aggregate["reachable"] += int(usage.get("reachable") or 0)
+        aggregate["tokens_in"] += int(usage.get("tokens_in") or 0)
+        aggregate["tokens_out"] += int(usage.get("tokens_out") or 0)
+        aggregate["est_cost_usd"] += float(usage.get("est_cost_usd") or 0)
+        aggregate["latencies_s"].extend(float(value) for value in usage.get("latencies_s", []))
+        aggregate["providers"].update(usage.get("providers") or {})
+        aggregate["diagnostics"].update(usage.get("diagnostics") or ())
+
+
+def _render_usage_rows(aggregates: dict[str, dict]) -> list[dict]:
+    """Render rolling usage aggregates without exposing response content."""
+    rows = []
+    for aggregate in aggregates.values():
+        latencies = list(aggregate["latencies_s"])
+        calls = int(aggregate["calls"])
+        reachable = int(aggregate["reachable"])
+        rows.append(
+            {
+                "name": aggregate["name"],
+                "model_id": aggregate["model_id"],
+                "calls": calls,
+                "reachable": reachable,
+                "tokens_in": int(aggregate["tokens_in"]),
+                "tokens_out": int(aggregate["tokens_out"]),
+                "est_cost_usd": round(float(aggregate["est_cost_usd"]), 4),
+                "success_rate": round(reachable / calls, 3) if calls else 0.0,
+                "mean_latency_s": round(mean(latencies), 2) if latencies else None,
+                "p95_latency_s": (
+                    round(value, 2) if (value := _percentile_95(latencies)) is not None else None
+                ),
+                "providers": dict(sorted(aggregate["providers"].items())),
+                "diagnostics": sorted(aggregate["diagnostics"]),
+            }
+        )
+    return sorted(rows, key=lambda row: str(row["model_id"]))
+
+
 def usage_report(
     days: int = 30,
     *,
@@ -268,6 +372,8 @@ def usage_report(
                 records.append(record)
 
     aggregates: dict[str, dict] = {}
+    usage_aggregates: dict[str, dict] = {}
+    natural_usage_aggregates: dict[str, dict] = {}
     modes = Counter(str(record.get("mode", "unknown")) for record in records)
     outcomes = Counter(str(record["outcome"]) for record in records if record.get("outcome"))
     decision_values = Counter(
@@ -298,6 +404,26 @@ def usage_report(
             if isinstance(duration, int | float):
                 aggregate["durations"].append(float(duration))
             aggregate["providers"][str(model.get("provider") or "unknown")] += 1
+        usage_rows = record.get("model_usage")
+        if not isinstance(usage_rows, list):
+            usage_rows = []
+            for model in record.get("models", []):
+                model_id = str(model.get("model_id") or model.get("name") or "unknown")
+                provider = str(model.get("provider") or "unknown")
+                result = ModelCallResult(
+                    name=str(model.get("name") or model_id),
+                    model_id=model_id,
+                    response="ok" if model.get("ok") else "[Error: unavailable]",
+                    provider=provider,
+                    latency_s=float(model.get("duration_s") or 0),
+                    tokens_in=model.get("tokens_in"),
+                    tokens_out=model.get("tokens_out"),
+                    diagnostics=tuple(model.get("diagnostics") or ()),
+                )
+                usage_rows.extend(_aggregate_model_usage([result]))
+        _accumulate_usage_rows(usage_aggregates, usage_rows)
+        if str(record.get("mode") or "unknown") != "benchmark":
+            _accumulate_usage_rows(natural_usage_aggregates, usage_rows)
 
     model_rows = []
     for aggregate in aggregates.values():
@@ -316,8 +442,10 @@ def usage_report(
             }
         )
     model_rows.sort(key=lambda row: (-int(row["appearances"]), str(row["name"])))
+    model_usage = _render_usage_rows(usage_aggregates)
+    natural_model_usage = _render_usage_rows(natural_usage_aggregates)
     report = {
-        "schema_version": 2,
+        "schema_version": 4,
         "generated_at": end.isoformat(),
         "window_days": days,
         "window_start": start.isoformat(),
@@ -338,6 +466,8 @@ def usage_report(
             sum(float(record.get("est_cost_usd") or 0) for record in records), 4
         ),
         "models": model_rows,
+        "model_usage": model_usage,
+        "natural_model_usage": natural_model_usage,
         "source": str(target),
     }
     if save:

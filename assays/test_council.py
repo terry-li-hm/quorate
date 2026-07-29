@@ -8,6 +8,32 @@ from quorate.config import ModelCallResult, ModelEntry
 from quorate.modes import council
 
 
+def test_k3_outcome_telemetry_recognises_incumbent_and_fireworks_routes():
+    assert council._has_successful_k3(
+        [ModelCallResult("K3", "k3", "answer", provider="kimi-code-api")]
+    )
+    assert council._has_successful_k3(
+        [
+            ModelCallResult(
+                "Kimi-K3-US",
+                "kimi-k3-us",
+                "answer",
+                provider="fireworks-us",
+            )
+        ]
+    )
+    assert not council._has_successful_k3(
+        [
+            ModelCallResult(
+                "Kimi-K3-US",
+                "kimi-k3-us",
+                "[Error: route unavailable]",
+                provider="none",
+            )
+        ]
+    )
+
+
 def test_council_uses_subscription_judge_fallback(monkeypatch):
     models = [ModelEntry(f"Model-{index}", f"vendor/model-{index}") for index in range(4)]
 
@@ -79,3 +105,129 @@ def test_council_uses_subscription_critic_fallback(monkeypatch):
     assert isinstance(result, dict)
     assert result["phases"]["critique"]["model"] == "anthropic/claude-opus-4-8"
     assert result["phases"]["critique"]["preferred_model"] == "google/gemini-3.5-flash"
+
+
+def test_council_usage_includes_debate_calls(monkeypatch):
+    models = [ModelEntry(f"Model-{index}", f"vendor/model-{index}") for index in range(4)]
+    appended = []
+
+    async def fake_run_parallel(*_args, **_kwargs):
+        return [
+            ModelCallResult(
+                entry.name,
+                entry.model.rsplit("/", 1)[-1],
+                f"Claim {index}",
+                provider="test",
+                tokens_in=10,
+                tokens_out=5,
+            )
+            for index, entry in enumerate(models)
+        ]
+
+    async def fake_model_runner(entry, *_args, **_kwargs):
+        return ModelCallResult(
+            entry.name,
+            entry.model.rsplit("/", 1)[-1],
+            "Debate response",
+            provider="test",
+            tokens_in=20,
+            tokens_out=10,
+        )
+
+    async def fake_judge(*_args, **_kwargs):
+        return "Synthesis"
+
+    monkeypatch.setattr(council.runlog, "append", appended.append)
+
+    asyncio.run(
+        council.run_council(
+            "question",
+            models=models,
+            rounds=1,
+            no_critic=True,
+            console=Console(quiet=True),
+            json_output=True,
+            parallel_runner=fake_run_parallel,
+            model_runner=fake_model_runner,
+            judge_runner=fake_judge,
+        )
+    )
+
+    assert len(appended) == 1
+    assert sum(row["calls"] for row in appended[0].model_usage) == 8
+    assert sum(row["tokens_in"] for row in appended[0].model_usage) == 120
+    assert sum(row["tokens_out"] for row in appended[0].model_usage) == 60
+
+
+def test_council_logs_failed_blind_phase(monkeypatch):
+    models = [ModelEntry(f"Model-{index}", f"vendor/model-{index}") for index in range(4)]
+    appended = []
+
+    async def fake_run_parallel(*_args, **_kwargs):
+        return [
+            ModelCallResult(
+                entry.name,
+                entry.model.rsplit("/", 1)[-1],
+                "Claim" if index == 0 else "[Error: unavailable]",
+                provider="test" if index == 0 else "none",
+            )
+            for index, entry in enumerate(models)
+        ]
+
+    monkeypatch.setattr(council.runlog, "append", appended.append)
+
+    result = asyncio.run(
+        council.run_council(
+            "question",
+            models=models,
+            console=Console(quiet=True),
+            json_output=True,
+            parallel_runner=fake_run_parallel,
+        )
+    )
+
+    assert isinstance(result, dict)
+    assert result["quorum_achieved"] is False
+    assert len(appended) == 1
+    assert sum(row["reachable"] for row in appended[0].model_usage) == 1
+
+
+def test_council_logs_member_calls_when_judge_fails(monkeypatch):
+    models = [ModelEntry(f"Model-{index}", f"vendor/model-{index}") for index in range(4)]
+    appended = []
+
+    async def fake_run_parallel(*_args, **_kwargs):
+        return [
+            ModelCallResult(
+                entry.name,
+                entry.model.rsplit("/", 1)[-1],
+                "Claim",
+                provider="test",
+            )
+            for entry in models
+        ]
+
+    async def fake_judge(*_args, **_kwargs):
+        return "[Error: judge unavailable]"
+
+    monkeypatch.setattr(council.runlog, "append", appended.append)
+
+    result = asyncio.run(
+        council.run_council(
+            "question",
+            models=models,
+            rounds=0,
+            no_critic=True,
+            judge_model="anthropic/claude-fable-5",
+            judge_fallback_model="anthropic/claude-fable-5",
+            console=Console(quiet=True),
+            json_output=True,
+            parallel_runner=fake_run_parallel,
+            judge_runner=fake_judge,
+        )
+    )
+
+    assert isinstance(result, dict)
+    assert result["phases"]["judge"]["error"] == "[Error: judge unavailable]"
+    assert len(appended) == 1
+    assert sum(row["calls"] for row in appended[0].model_usage) == 4

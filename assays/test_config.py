@@ -24,6 +24,12 @@ def test_api_keys_include_kimi_code_membership_key(monkeypatch):
     assert api_keys()["kimi_code"] == "membership-key"
 
 
+def test_fireworks_api_key_prefers_quorate_namespace(monkeypatch):
+    monkeypatch.setenv("FIREWORKS_API_KEY", "general-key")
+    monkeypatch.setenv("QUORATE_FIREWORKS_KEY", "quorate-key")
+    assert api_keys()["fireworks"] == "quorate-key"
+
+
 class TestDisplayName:
     def test_gpt(self):
         assert _display_name("openai/gpt-5.4-pro") == "GPT-5.4-Pro"
@@ -42,6 +48,9 @@ class TestDisplayName:
 
     def test_grok(self):
         assert _display_name("x-ai/grok-4") == "Grok-4"
+
+    def test_fireworks_kimi_k3_us(self):
+        assert _display_name("accounts/fireworks/routers/kimi-k3-us") == "Kimi-K3-US"
 
 
 class TestIsThinkingModel:
@@ -62,6 +71,9 @@ class TestIsThinkingModel:
 
     def test_minimax_m3(self):
         assert is_thinking_model("minimax/minimax-m3") is True
+
+    def test_fireworks_kimi_k3_us(self):
+        assert is_thinking_model("accounts/fireworks/routers/kimi-k3-us") is True
 
     def test_non_thinking(self):
         assert is_thinking_model("anthropic/claude-haiku-4-5") is False
@@ -93,6 +105,9 @@ class TestModelMaxTokens:
 
     def test_gpt(self):
         assert model_max_tokens("openai/gpt-5.4-pro") == 16384
+
+    def test_fireworks_kimi_k3_us(self):
+        assert model_max_tokens("accounts/fireworks/routers/kimi-k3-us") == 16384
 
     def test_unknown(self):
         assert model_max_tokens("unknown/model") == 8192
