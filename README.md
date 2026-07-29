@@ -47,6 +47,8 @@ selected as judge or critic. The default K3 seat remains the Kimi Code
 membership route until the candidate completes its route assay and canary gate.
 Saved canary evidence includes the requested-tier contract marker, so a Standard
 or unattested run cannot pass the exact-route checker.
+The Priority contract passed its one-shot 3-of-3 canary on 30 July 2026; the
+paired same-K3 route assay remains outstanding, so the candidate stays dormant.
 
 ## Usage
 

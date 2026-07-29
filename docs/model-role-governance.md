@@ -39,7 +39,7 @@ As of 17 July 2026, K3 is deployed as a trial in Quorate's Kimi family seat, whi
 
 ## Fireworks US route candidate
 
-As of 29 July 2026, Quorate has dormant client support for Fireworks'
+As of 30 July 2026, Quorate has dormant client support for Fireworks'
 `accounts/fireworks/routers/kimi-k3-us`, but the Kimi membership API remains the
 default K3 route. The candidate accepts only Fireworks' Chat Completions endpoint
 through its Priority serving tier and fails closed without falling through to
@@ -54,9 +54,10 @@ request metadata is logged, and the reviewed public terms and DPA do not provide
 an express blanket US-residency covenant. A regulated residency requirement
 therefore needs a binding order form or MSA.
 
-The route is not admitted to trial until it passes the predeclared same-K3 route
-assay and then passes all three fixed canaries itself through `fireworks-us`
-without diagnostics. Overall council quorum is not enough. See the
+The Priority contract passed all three fixed canaries through `fireworks-us`
+without diagnostics on 30 July 2026. This clears only the canary gate. The route
+is not admitted to trial until it also passes the predeclared same-K3 route
+assay; overall council quorum is not enough. See the
 [Fireworks US K3 candidate note](experiments/2026-07-29-fireworks-us-k3-route-candidate.md)
 for the locked criteria, credential gate, and unresolved reasoning-control
 question.

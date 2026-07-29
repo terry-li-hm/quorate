@@ -163,17 +163,29 @@ diagnostic `fireworks-us:timeout`. The seat summary was 2 reachable, 2 passed,
 providers `{"fireworks-us": 2, "none": 1}`, and an estimated API cost of
 US$0.0030.
 
-This result fails the predeclared 3-of-3 route gate. The Fireworks route remains
-dormant, and the paired 20-case route assay has not been run. The next live call,
-if separately approved, is one Priority-tier three-canary run. It must stop on
-anything short of an attested 3-of-3 pass rather than rerunning until the
-stochastic result changes.
+This Standard-tier result failed the predeclared 3-of-3 route gate.
+
+On 30 July 2026, one separately approved Priority-tier run used the
+`fireworks-us-k3-priority-v1` client contract. K3 passed all three canaries
+through `fireworks-us` with no diagnostics: exact token in 4.08 seconds, JSON
+contract in 15.00 seconds and simple reasoning in 11.38 seconds. The exact-route
+checker exited 0, overall quorum remained healthy, and the K3 calls used 335
+input and 409 output tokens at an estimated US$0.0098; total estimated benchmark
+cost was US$0.0118.
+
+The read-only response-free artifact is
+`/Users/terry/tmp/quorate-fireworks-k3-priority-v1-canary.json`, SHA-256
+`e8ce8fb4c4c026d7346f193a6b7c4570e1cf9d5c662a151048a68795694810fa`.
+Its stderr artifact is empty. This clears the Priority 3-of-3 canary gate once;
+it does not admit or activate the route. The incumbent remains the default and
+the paired 20-case route assay has not been run.
 
 ## Unresolved gates
 
-The Priority-tier client must clear the exact 3-of-3 canary gate before the
-JSON-contract timeout is treated as mitigated. If it passes, the single
-predeclared paired same-K3 route assay remains outstanding. K3-specific
-reasoning controls and the effect of transient prompt caching remain live-test
-questions. A binding contractual US-residency commitment remains a separate
-procurement gate for regulated or sensitive use.
+The single predeclared paired same-K3 route assay is now the next admission
+gate. It requires separate approval because it makes at most 80 synthetic model
+calls. Only a valid assay pass may begin a reversible M4 override trial; the
+incumbent remains the default meanwhile. K3-specific reasoning controls and the
+effect of transient prompt caching remain live-test questions. A binding
+contractual US-residency commitment remains a separate procurement gate for
+regulated or sensitive use.

@@ -79,6 +79,6 @@ Council seat: Claude Opus 4.8. Judge: Claude Fable 5, with GPT-5.6 Sol through C
 - Thinking models need longer timeouts (180s+) in parallel execution
 - Scripted quick and council runs fail closed when fewer than a strict majority respond. Their error envelope retains partial responses plus sanitized route codes, never provider error prose.
 - Headless K3 calls require `KIMI_CODE_API_KEY`; never make a scheduled or piped run fall back to the interactive Kimi Code CLI.
-- Fireworks K3 remains inactive until its route assay and exact-route canaries pass. Do not add it to the roster, enable a non-US Fireworks model, use the Responses API, or send `reasoning_effort` before a credentialed K3-specific smoke test.
+- Fireworks K3 remains inactive. Its Priority contract passed the exact 3-of-3 canary on 30 July 2026, but the paired same-K3 route assay remains outstanding. Do not add it to the roster, enable a non-US Fireworks model, use the Responses API, or send `reasoning_effort`.
 - Benchmark snapshots never persist response text and never edit the roster. A seat change requires external task-specific evidence, a valid role-specific assay, and healthy local canaries. Admission never transfers between roles; follow `docs/model-role-governance.md`.
 - Council runtime is dominated by sequential debate phase (~2-3 min for 6 speakers) + judge with 300s timeout — not a bug, just the design
