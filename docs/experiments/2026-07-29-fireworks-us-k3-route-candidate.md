@@ -178,14 +178,36 @@ The read-only response-free artifact is
 `e8ce8fb4c4c026d7346f193a6b7c4570e1cf9d5c662a151048a68795694810fa`.
 Its stderr artifact is empty. This clears the Priority 3-of-3 canary gate once;
 it does not admit or activate the route. The incumbent remains the default and
-the paired 20-case route assay has not been run.
+the paired 20-case route assay remained a separate gate.
 
-## Unresolved gates
+The separately approved paired assay then ran once on 30 July 2026 with the
+fixed seed `20260729`, 20 synthetic cases, identical 1,024-token candidate caps,
+and the `fireworks-us-k3-priority-v1` contract. The incumbent produced 20 of 20
+reachable, compliant, in-time responses with a 14.015-second median latency.
+Fireworks produced 15 of 20 operational passes with a 14.465-second median
+latency; five responses were classified as truncated. Route isolation,
+randomized balance, and the latency ratio passed, but the Fireworks floor of 19
+compound operational passes failed.
 
-The single predeclared paired same-K3 route assay is now the next admission
-gate. It requires separate approval because it makes at most 80 synthetic model
-calls. Only a valid assay pass may begin a reversible M4 override trial; the
-incumbent remains the default meanwhile. K3-specific reasoning controls and the
-effect of transient prompt caching remain live-test questions. A binding
-contractual US-residency commitment remains a separate procurement gate for
-regulated or sensitive use.
+Only the 15 eligible pairs were judged, leaving Fable and GPT with 15 reachable,
+valid decisions each instead of the required 18. Fireworks received 15 points
+across the 30 observed decisions, but the missing ten judgments make this an
+invalid 40-decision quality comparison. The recorded action is `invalid-run`
+because multiple non-compensable validity gates failed.
+
+The read-only response-free assay artifact is
+`/Users/terry/tmp/quorate-k3-route-assay-priority-v1-seed-20260729.json`,
+SHA-256
+`e838a2ead5817f51ca0fd25c7856be54730509695da4602a110b8c57e1350a6b`.
+It retains 40 candidate attempts, 30 judgments, and no response text; its stderr
+artifact is empty.
+
+## Admission decision
+
+The Fireworks route is not admitted to a reversible M4 trial. A predeclared
+validity failure is not permission to rerun for a favorable sample, so the same
+route and request contract must not repeat this assay. Any reconsideration
+requires a material provider or request-contract change, a newly predeclared
+test, and separate approval. The incumbent remains the default. A binding
+contractual US-residency commitment would remain a separate procurement gate
+if the route were reconsidered for regulated or sensitive use.

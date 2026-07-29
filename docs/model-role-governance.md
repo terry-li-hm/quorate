@@ -55,9 +55,13 @@ an express blanket US-residency covenant. A regulated residency requirement
 therefore needs a binding order form or MSA.
 
 The Priority contract passed all three fixed canaries through `fireworks-us`
-without diagnostics on 30 July 2026. This clears only the canary gate. The route
-is not admitted to trial until it also passes the predeclared same-K3 route
-assay; overall council quorum is not enough. See the
+without diagnostics on 30 July 2026. The paired same-K3 assay then failed its
+predeclared validity gates: the incumbent produced 20 of 20 operational passes,
+while Fireworks produced 15 of 20 and truncated five responses. The resulting
+15 eligible pairs left each judge with only 15 decisions, below the required
+18. The route is not admitted to trial, the unchanged assay must not be rerun,
+and the Kimi membership API remains the default. See the
 [Fireworks US K3 candidate note](experiments/2026-07-29-fireworks-us-k3-route-candidate.md)
-for the locked criteria, credential gate, and unresolved reasoning-control
-question.
+for the locked criteria and response-free evidence. Any reconsideration requires
+a materially changed route or request contract, a newly predeclared assay, and
+separate approval.

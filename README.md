@@ -43,12 +43,11 @@ Selecting `accounts/fireworks/routers/kimi-k3-us` calls Fireworks directly and
 requests its documented Priority serving tier for higher reliability. It fails
 closed and never falls through to OpenRouter, Kimi, another Fireworks model, or
 the Standard serving tier. It is restricted to a member seat and cannot be
-selected as judge or critic. The default K3 seat remains the Kimi Code
-membership route until the candidate completes its route assay and canary gate.
-Saved canary evidence includes the requested-tier contract marker, so a Standard
-or unattested run cannot pass the exact-route checker.
-The Priority contract passed its one-shot 3-of-3 canary on 30 July 2026; the
-paired same-K3 route assay remains outstanding, so the candidate stays dormant.
+selected as judge or critic. Its Priority contract passed the one-shot 3-of-3
+canary on 30 July 2026, but the paired same-K3 assay then returned an invalid
+run: the incumbent completed 20 of 20 cases while Fireworks completed 15 of 20
+and truncated five. The route is not admitted, the unchanged assay must not be
+rerun, and the Kimi Code membership route remains the default K3 seat.
 
 ## Usage
 
