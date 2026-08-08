@@ -425,3 +425,43 @@ class TestOutcome:
 
         monkeypatch.setattr(builtins, "input", _eof)
         assert runlog.prompt_outcome() == (None, None, None)
+
+
+def test_usage_report_rolls_up_divergence_by_decision_value(tmp_path):
+    path = tmp_path / "runs.jsonl"
+    now = dt.datetime(2026, 8, 8, tzinfo=dt.timezone.utc)
+    rows = [
+        {
+            "ts": now.isoformat(),
+            "mode": "council",
+            "models": [],
+            "decision_value": "improved",
+            "divergence": {"index": 60.0, "distinct_positions": 3},
+        },
+        {
+            "ts": now.isoformat(),
+            "mode": "council",
+            "models": [],
+            "decision_value": "unchanged",
+            "divergence": {"index": 10.0, "distinct_positions": 1},
+        },
+        {
+            "ts": now.isoformat(),
+            "mode": "council",
+            "models": [],
+            "decision_value": "unchanged",
+            "divergence": {"index": 20.0, "distinct_positions": 1},
+        },
+        {"ts": now.isoformat(), "mode": "council", "models": [], "divergence": None},
+    ]
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    report = runlog.usage_report(days=7, path=path, now=now)
+    summary = report["divergence"]
+
+    assert summary["scored_runs"] == 3
+    assert summary["mean_index"] == 30.0
+    assert summary["min_index"] == 10.0 and summary["max_index"] == 60.0
+    assert summary["distinct_positions"] == {"1": 2, "3": 1}
+    assert summary["mean_index_by_decision_value"]["improved"] == {"runs": 1, "mean_index": 60.0}
+    assert summary["mean_index_by_decision_value"]["unchanged"] == {"runs": 2, "mean_index": 15.0}

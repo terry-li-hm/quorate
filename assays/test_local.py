@@ -227,5 +227,6 @@ def test_council_uses_injected_local_runners(monkeypatch):
     )
 
     assert sequential_calls == [CODEX_ENTRY.model, GEMINI_ENTRY.model]
-    assert judge_calls == [CODEX_ENTRY.model, GEMINI_ENTRY.model]
+    # Divergence scoring, then synthesis, both on the judge; critique on the critic.
+    assert judge_calls == [CODEX_ENTRY.model, CODEX_ENTRY.model, GEMINI_ENTRY.model]
     assert result["quorum_achieved"] is True

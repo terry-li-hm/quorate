@@ -111,6 +111,7 @@ class RunRecord:
     outcome: str | None = None
     decision_value: str | None = None
     k3_effect: str | None = None
+    divergence: dict | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -126,6 +127,7 @@ class RunRecord:
             "outcome": self.outcome,
             "decision_value": self.decision_value,
             "k3_effect": self.k3_effect,
+            "divergence": self.divergence,
         }
 
 
@@ -195,6 +197,7 @@ def build_record(
     outcome: str | None = None,
     decision_value: str | None = None,
     k3_effect: str | None = None,
+    divergence: dict | None = None,
 ) -> RunRecord:
     """Assemble a RunRecord. extra_results carries judge/critique cost into totals."""
     results_list = list(results)
@@ -220,6 +223,7 @@ def build_record(
         outcome=outcome,
         decision_value=decision_value,
         k3_effect=k3_effect,
+        divergence=divergence,
     )
 
 
@@ -274,6 +278,43 @@ def append(record: RunRecord, path: Path | None = None) -> Path:
     with target.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record.to_dict(), ensure_ascii=False) + "\n")
     return target
+
+
+def _divergence_summary(records: Iterable[dict]) -> dict:
+    """Roll blind-divergence scores up, split by how the run was later rated.
+
+    The split is the point. A high mean tells you the panel started apart; the
+    breakdown against decision_value tells you whether starting apart is what
+    made the panel worth convening, which is the only way to learn from the
+    log which question shapes deserve a council and which merely cost one.
+    """
+    indices: list[float] = []
+    by_value: dict[str, list[float]] = {}
+    positions: Counter = Counter()
+    for record in records:
+        divergence = record.get("divergence")
+        if not isinstance(divergence, dict):
+            continue
+        index = divergence.get("index")
+        if not isinstance(index, int | float) or isinstance(index, bool):
+            continue
+        indices.append(float(index))
+        distinct = divergence.get("distinct_positions")
+        if isinstance(distinct, int) and not isinstance(distinct, bool):
+            positions[str(distinct)] += 1
+        if record.get("decision_value"):
+            by_value.setdefault(str(record["decision_value"]), []).append(float(index))
+    return {
+        "scored_runs": len(indices),
+        "mean_index": round(mean(indices), 1) if indices else None,
+        "min_index": round(min(indices), 1) if indices else None,
+        "max_index": round(max(indices), 1) if indices else None,
+        "distinct_positions": dict(sorted(positions.items())),
+        "mean_index_by_decision_value": {
+            value: {"runs": len(scores), "mean_index": round(mean(scores), 1)}
+            for value, scores in sorted(by_value.items())
+        },
+    }
 
 
 def _percentile_95(values: list[float]) -> float | None:
@@ -445,7 +486,7 @@ def usage_report(
     model_usage = _render_usage_rows(usage_aggregates)
     natural_model_usage = _render_usage_rows(natural_usage_aggregates)
     report = {
-        "schema_version": 4,
+        "schema_version": 5,
         "generated_at": end.isoformat(),
         "window_days": days,
         "window_start": start.isoformat(),
@@ -462,6 +503,7 @@ def usage_report(
                 for judge, values in sorted(judge_values.items())
             },
         },
+        "divergence": _divergence_summary(records),
         "estimated_api_cost_usd": round(
             sum(float(record.get("est_cost_usd") or 0) for record in records), 4
         ),

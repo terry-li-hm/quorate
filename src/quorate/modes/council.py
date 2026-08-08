@@ -25,6 +25,7 @@ from quorate.config import (
     resolved_judge,
     resolved_judge_fallback,
 )
+from quorate.divergence import divergence_messages, format_divergence, parse_divergence
 from quorate.heavyskill import prune_cot, shuffle_traces
 from quorate.prompts import (
     BLIND_SYSTEM,
@@ -139,6 +140,7 @@ async def run_council(
     judge_model: str | None = None,
     critic_model: str | None = None,
     no_critic: bool = False,
+    score_divergence: bool = True,
     shuffle_traces_enabled: bool = False,
     prune_cot_enabled: bool = False,
     console: Console | None = None,
@@ -230,6 +232,29 @@ async def run_council(
             result["error"] = message
             return result
         return ""
+
+    # --- BLIND DIVERGENCE ---
+    # Scored here, between blind and debate, because after the debate any
+    # convergence is partly the protocol's doing rather than the question's.
+    divergence: dict[str, Any] | None = None
+    if score_divergence and len(blind_claims) > 1:
+        scoring_messages = divergence_messages(full_question, blind_claims)
+        raw = await run_judge(judge, scoring_messages, max_tokens=1024, timeout=120)
+        # The preferred judge is routinely unreachable, which is why synthesis
+        # has a fallback. Without the same fallback here the score is never
+        # taken in exactly the environments where the council still runs fine.
+        if is_error(raw) and judge_fallback != judge:
+            raw = await run_judge(judge_fallback, scoring_messages, max_tokens=1024, timeout=120)
+        if not is_error(raw):
+            divergence = parse_divergence(raw, list(blind_claims))
+        if divergence:
+            console.print(f"[dim]{format_divergence(divergence)}[/dim]")
+            if json_output:
+                result["divergence"] = divergence
+                stream_event("divergence", divergence)
+        else:
+            # An instrument that fails must not take the deliberation with it.
+            console.print("[dim]Blind divergence unscored.[/dim]")
 
     # --- DEBATE ROUNDS ---
     blind_summary = "\n\n".join(
@@ -349,6 +374,7 @@ async def run_council(
                 extra_results=debate_results,
                 total_duration_s=time.monotonic() - start,
                 judge_model=judge_used,
+                divergence=divergence,
             )
         )
         if json_output:
@@ -432,6 +458,7 @@ async def run_council(
         outcome=outcome,
         decision_value=decision_value,
         k3_effect=k3_effect,
+        divergence=divergence,
     )
     runlog.append(record)
     footer_lines, summary = runlog.format_footer(

@@ -98,7 +98,23 @@ quorate council "question" --persona ./founder.md  # all models answer as this p
 quorate council "question" --context banking-frame.md  # inject regulatory/domain context
 quorate council "question" --local --workspace ./public-demo  # fixed two-seat local roster
 quorate council "question" --json                # force JSON envelope (auto when piped)
+quorate council "question" --no-divergence       # skip the blind divergence score
 ```
+
+### Blind divergence
+
+Every council scores how far apart the panel started. After the blind phase and before
+the debate, one small call groups the opening claims by the position each argues, and the
+index is the share of the panel outside the largest bloc: 0 when everyone opened in the
+same place, higher as the panel splits. It is taken before the debate on purpose, because
+once members have seen each other any convergence is partly the protocol's doing.
+
+The point is the accumulation, not the single line. `quorate usage` reports the mean index
+over the window and breaks it down by how you later rated each run, so the log answers a
+question a single deliberation cannot: which shapes of question actually split a panel, and
+are those the ones where convening it improved the decision. If the grouping comes back
+unusable it is discarded rather than recorded, since a half-scored panel would move the
+mean and read like real agreement. `--no-divergence` skips the call.
 
 `--persona` takes a **file path** to a stakeholder profile, not an inline description — every
 model then debates in that principal's first-person voice. `--context` is repeatable; each item

@@ -46,6 +46,12 @@ _tree.add_command(
             "description": "Force 2+ debate rounds",
         },
         {
+            "name": "--no-divergence",
+            "type": "boolean",
+            "default": False,
+            "description": "Skip the blind divergence score taken before the debate",
+        },
+        {
             "name": "--shuffle-traces",
             "type": "boolean",
             "default": False,
@@ -665,6 +671,7 @@ def council(
     persona: str | None = None,
     deep: bool = False,
     fast: bool = False,
+    divergence: bool = True,
     shuffle_traces: bool = False,
     prune_cot: bool = False,
     local: bool = False,
@@ -678,6 +685,9 @@ def council(
     Default: 1 debate round + critique (5-8 min).
     --persona <profile-path> makes every model debate as the named principal.
     Persona and context must be public, synthetic, or deliberately sanitized.
+    --no-divergence skips the blind divergence score, one small call that
+    records how far apart the panel started so the run log can show which
+    questions actually split it.
     """
     json_output = json_output or _is_agent()
     from quorate.local import CODEX_ENTRY, GEMINI_ENTRY, local_models
@@ -702,6 +712,7 @@ def council(
             judge_model=CODEX_ENTRY.model if local_runner else None,
             critic_model=GEMINI_ENTRY.model if local_runner else None,
             no_critic=fast,
+            score_divergence=divergence,
             shuffle_traces_enabled=shuffle_traces,
             prune_cot_enabled=prune_cot,
             console=console,
