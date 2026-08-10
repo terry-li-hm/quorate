@@ -12,7 +12,7 @@ uvx quorate quick "Should I learn Rust?"
 pip install quorate
 ```
 
-On the Vivesca host, install through the local helper so the ordinary `quorate`
+Within Propria, install through the local helper so the ordinary `quorate`
 command enters the 1Password effector and can use subscription and API routes:
 
 ```bash
@@ -242,7 +242,7 @@ for the evidence behind the sixth council seat, and the
 [2026-07-16 brainstorm mode validation](docs/experiments/2026-07-16-brainstorm-mode.md)
 for the divergent ideation architecture.
 
-On the Vivesca host, `scripts/monthly-benchmark.sh` is the non-interactive runner.
+Within Propria, `scripts/monthly-benchmark.sh` is the non-interactive runner.
 It loads the locally resolved credential environment, uses subscription routes first,
 and records the rolling usage snapshot. It fails before any provider call if the
 headless Kimi credential is absent. If the Fireworks trial override is selected, it
