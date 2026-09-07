@@ -27,9 +27,11 @@ from quorate.config import (
     ModelCallResult,
     ModelEntry,
     ReasoningEffort,
+    anthropic_uses_adaptive_thinking,
     api_keys,
     is_error,
     is_thinking_model,
+    openrouter_model_id,
 )
 
 # Type alias for provider function returns: (content, {tokens_in, tokens_out} | None)
@@ -85,7 +87,7 @@ async def _openrouter(
     if is_thinking_model(model):
         max_tokens = max(max_tokens, 4096)
     body: dict = {
-        "model": model,
+        "model": openrouter_model_id(model),
         "messages": [m.to_dict() for m in messages],
         "max_tokens": max_tokens,
     }
@@ -264,15 +266,23 @@ async def _anthropic(
     effort: ReasoningEffort | None,
 ) -> ProviderResult:
     bare = model.removeprefix("anthropic/")
-    budget = effort.anthropic_budget() if effort else None
-    if budget:
+    adaptive = anthropic_uses_adaptive_thinking(model)
+    budget = None if adaptive else (effort.anthropic_budget() if effort else None)
+    if adaptive:
+        # Adaptive thinking sizes itself; only keep a sane output floor.
+        max_tokens = max(max_tokens, 4096)
+    elif budget:
         max_tokens = max(max_tokens, budget + 2000)
     body: dict = {
         "model": bare,
         "messages": [m.to_dict() for m in messages],
         "max_tokens": max_tokens,
     }
-    if budget:
+    if adaptive:
+        if effort:
+            body["thinking"] = {"type": "adaptive"}
+            body["output_config"] = {"effort": effort.value}
+    elif budget:
         body["thinking"] = {"type": "enabled", "budget_tokens": budget}
     try:
         resp = await client.post(

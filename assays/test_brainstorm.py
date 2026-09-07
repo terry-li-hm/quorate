@@ -25,7 +25,7 @@ def test_brainstorm_runs_two_rounds_then_curates(monkeypatch):
         )
 
     async def fake_query_judge(model, *_args, **_kwargs):
-        assert model == "anthropic/claude-fable-5"
+        assert model == "anthropic/claude-fable-5-1"
         return "## Shortlist\nCurated ideas\n\n## Wildcard\nOne bet\n\n## Pattern map\nA pattern"
 
     monkeypatch.setattr(brainstorm, "query_model", fake_query_model)
@@ -45,7 +45,7 @@ def test_brainstorm_runs_two_rounds_then_curates(monkeypatch):
     assert result["quorum_achieved"] is True
     assert len(result["phases"]["generation"]) == 4
     assert len(result["phases"]["cross_pollination"]) == 4
-    assert result["phases"]["curation"]["model"] == "anthropic/claude-fable-5"
+    assert result["phases"]["curation"]["model"] == "anthropic/claude-fable-5-1"
     assert result["phases"]["generation"][0]["lens"] == "First principles"
     assert result["phases"]["cross_pollination"][0]["source_model"] == "Model-1"
 
@@ -85,7 +85,7 @@ def test_brainstorm_falls_back_when_curator_misses_contract(monkeypatch):
         return ModelCallResult(entry.name, entry.model, "ideas", provider="test")
 
     async def fake_query_judge(model, *_args, **_kwargs):
-        if model == "anthropic/claude-fable-5":
+        if model == "anthropic/claude-fable-5-1":
             return "A caveat without the requested shortlist"
         assert model == "openai/gpt-5.6-sol"
         return "## Shortlist\nSix ideas\n\n## Wildcard\nOne bet\n\n## Pattern map\nA pattern"
@@ -105,7 +105,7 @@ def test_brainstorm_falls_back_when_curator_misses_contract(monkeypatch):
 
     assert isinstance(result, dict)
     assert result["phases"]["curation"]["model"] == "openai/gpt-5.6-sol"
-    assert result["phases"]["curation"]["preferred_model"] == "anthropic/claude-fable-5"
+    assert result["phases"]["curation"]["preferred_model"] == "anthropic/claude-fable-5-1"
 
 
 def test_brainstorm_logs_member_calls_when_all_curators_fail(monkeypatch):

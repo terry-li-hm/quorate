@@ -55,6 +55,13 @@ class TestPriceLookup:
     def test_fireworks_kimi_k3_us_includes_us_priority_premium(self):
         assert runlog.price_for("kimi-k3-us") == (4.125, 20.625)
 
+    def test_claude_5_family_prices_are_explicit(self):
+        # Opus 5 has no prefix overlap with the 4.x rows, so an explicit row keeps
+        # OpenRouter-fallback cost estimates off $0.
+        assert runlog.price_for("anthropic/claude-opus-5") == (5.00, 25.00)
+        assert runlog.price_for("claude-fable-5-1") == (10.00, 50.00)
+        assert runlog.price_for("claude-sonnet-5") == (2.00, 10.00)
+
 
 class TestEstimateCost:
     def test_grok43_basic(self):

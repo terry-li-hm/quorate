@@ -1,15 +1,19 @@
 """Tests for quorate.config — model resolution, display names, error detection."""
 
 from quorate.config import (
+    CLASSIFIER_MODEL,
     Message,
     ReasoningEffort,
     _display_name,
+    _normalize_model,
+    anthropic_uses_adaptive_thinking,
     api_keys,
     benchmark_models,
     brainstorm_models,
     is_error,
     is_thinking_model,
     model_max_tokens,
+    openrouter_model_id,
     quick_models,
     resolved_council,
     resolved_critique,
@@ -52,6 +56,23 @@ class TestDisplayName:
     def test_fireworks_kimi_k3_us(self):
         assert _display_name("accounts/fireworks/routers/kimi-k3-us") == "Kimi-K3-US"
 
+    def test_claude_fable_5_1(self):
+        assert _display_name("anthropic/claude-fable-5-1") == "Claude-Fable-5-1"
+
+
+class TestModelAliases:
+    def test_sonnet_alias(self):
+        assert _normalize_model("sonnet") == "anthropic/claude-sonnet-5"
+
+    def test_opus_alias(self):
+        assert _normalize_model("opus") == "anthropic/claude-opus-5"
+
+    def test_fable_alias(self):
+        assert _normalize_model("fable") == "anthropic/claude-fable-5-1"
+
+    def test_alias_matching_ignores_case_and_padding(self):
+        assert _normalize_model("  FABLE ") == "anthropic/claude-fable-5-1"
+
 
 class TestIsThinkingModel:
     def test_gemini_flash(self):
@@ -75,8 +96,66 @@ class TestIsThinkingModel:
     def test_fireworks_kimi_k3_us(self):
         assert is_thinking_model("accounts/fireworks/routers/kimi-k3-us") is True
 
+    def test_claude_5_family(self):
+        for model in ("claude-fable-5-1", "claude-opus-5", "claude-sonnet-5"):
+            assert is_thinking_model(f"anthropic/{model}") is True
+
     def test_non_thinking(self):
         assert is_thinking_model("anthropic/claude-haiku-4-5") is False
+
+
+class TestAnthropicAdaptiveThinking:
+    def test_claude_5_family_is_adaptive(self):
+        for model in (
+            "anthropic/claude-fable-5",
+            "anthropic/claude-fable-5-1",
+            "anthropic/claude-mythos-5",
+            "anthropic/claude-opus-5",
+            "anthropic/claude-sonnet-5",
+        ):
+            assert anthropic_uses_adaptive_thinking(model) is True
+
+    def test_bare_claude_ids_are_adaptive(self):
+        for model in ("claude-fable-5-1", "claude-opus-5", "claude-sonnet-4-6"):
+            assert anthropic_uses_adaptive_thinking(model) is True
+
+    def test_opus_and_sonnet_4_6_through_4_8_are_adaptive(self):
+        for name in ("claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8"):
+            assert anthropic_uses_adaptive_thinking(f"anthropic/{name}") is True
+
+    def test_older_anthropic_models_keep_budget_tokens(self):
+        for name in (
+            "claude-haiku-4-5",
+            "claude-sonnet-4-5",
+            "claude-opus-4-5",
+            "claude-3-5-sonnet",
+        ):
+            assert anthropic_uses_adaptive_thinking(f"anthropic/{name}") is False
+
+    def test_non_anthropic_models(self):
+        assert anthropic_uses_adaptive_thinking("openai/gpt-5.6-sol") is False
+        assert anthropic_uses_adaptive_thinking("google/gemini-3.5-flash") is False
+
+
+class TestOpenRouterModelId:
+    def test_two_part_versions_become_dotted(self):
+        assert openrouter_model_id("anthropic/claude-fable-5-1") == "anthropic/claude-fable-5.1"
+        assert openrouter_model_id("anthropic/claude-haiku-4-5") == "anthropic/claude-haiku-4.5"
+        assert openrouter_model_id("anthropic/claude-opus-4-8") == "anthropic/claude-opus-4.8"
+
+    def test_single_version_ids_are_unchanged(self):
+        assert openrouter_model_id("anthropic/claude-opus-5") == "anthropic/claude-opus-5"
+        assert openrouter_model_id("anthropic/claude-sonnet-5") == "anthropic/claude-sonnet-5"
+
+    def test_bare_claude_id(self):
+        assert openrouter_model_id("claude-fable-5-1") == "claude-fable-5.1"
+
+    def test_non_anthropic_ids_are_verbatim(self):
+        assert openrouter_model_id("openai/gpt-5.6-sol") == "openai/gpt-5.6-sol"
+        assert (
+            openrouter_model_id("accounts/fireworks/routers/kimi-k3-us")
+            == "accounts/fireworks/routers/kimi-k3-us"
+        )
 
 
 class TestIsError:
@@ -156,7 +235,7 @@ class TestCouncilResolution:
         assert len(brainstorm_models()) == 8
 
     def test_judge_default(self):
-        assert resolved_judge() == "anthropic/claude-fable-5"
+        assert resolved_judge() == "anthropic/claude-fable-5-1"
 
     def test_gemini_alias_uses_stable_judge(self, monkeypatch):
         monkeypatch.setenv("CONSILIUM_MODEL_JUDGE", "gemini")
@@ -166,7 +245,10 @@ class TestCouncilResolution:
         assert resolved_critique() == "google/gemini-3.5-flash"
 
     def test_critique_subscription_fallback(self):
-        assert resolved_critique_fallback() == "anthropic/claude-opus-4-8"
+        assert resolved_critique_fallback() == "anthropic/claude-opus-5"
+
+    def test_classifier_default(self):
+        assert CLASSIFIER_MODEL == "anthropic/claude-opus-5"
 
     def test_judge_subscription_fallback(self):
         assert resolved_judge_fallback() == "openai/gpt-5.6-sol"
@@ -174,7 +256,7 @@ class TestCouncilResolution:
     def test_frontier_defaults_preserve_generalist_diversity(self):
         assert [entry.model for entry in resolved_council()] == [
             "openai/gpt-5.6-sol",
-            "anthropic/claude-opus-4-8",
+            "anthropic/claude-opus-5",
             "x-ai/grok-4.5",
             "kimi-code/k3",
             "z-ai/glm-5.2",

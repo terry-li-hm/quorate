@@ -75,11 +75,11 @@ ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 
 # Default models
-JUDGE_MODEL = "anthropic/claude-fable-5"
+JUDGE_MODEL = "anthropic/claude-fable-5-1"
 JUDGE_FALLBACK_MODEL = "openai/gpt-5.6-sol"
 CRITIQUE_MODEL = "google/gemini-3.5-flash"
-CRITIQUE_FALLBACK_MODEL = "anthropic/claude-opus-4-8"
-CLASSIFIER_MODEL = "anthropic/claude-opus-4-8"
+CRITIQUE_FALLBACK_MODEL = "anthropic/claude-opus-5"
+CLASSIFIER_MODEL = "anthropic/claude-opus-5"
 XAI_DEFAULT_MODEL = "grok-4.5"
 BRAINSTORM_EXTRA_MODELS = (
     "google/gemini-3.5-flash",
@@ -97,9 +97,9 @@ def _normalize_model(value: str) -> str:
         case "sonnet":
             return "anthropic/claude-sonnet-5"
         case "opus":
-            return "anthropic/claude-opus-4-8"
+            return "anthropic/claude-opus-5"
         case "fable":
-            return "anthropic/claude-fable-5"
+            return "anthropic/claude-fable-5-1"
         case "gemini":
             return "google/gemini-3.5-flash"
         case _:
@@ -109,7 +109,7 @@ def _normalize_model(value: str) -> str:
 def resolved_council() -> list[ModelEntry]:
     """Resolve council models at runtime with env overrides."""
     model_1 = _env("CONSILIUM_MODEL_M1") or "openai/gpt-5.6-sol"
-    model_2 = _env("CONSILIUM_MODEL_M2") or "anthropic/claude-opus-4-8"
+    model_2 = _env("CONSILIUM_MODEL_M2") or "anthropic/claude-opus-5"
     model_3 = _env("CONSILIUM_MODEL_M3") or "x-ai/grok-4.5"
     model_4 = _env("CONSILIUM_MODEL_M4") or "kimi-code/k3"
     model_5 = _env("CONSILIUM_MODEL_M5") or "z-ai/glm-5.2"
@@ -216,9 +216,12 @@ def _xai_label(model: str) -> str:
 
 THINKING_MODELS = {
     "claude-fable-5",
+    "claude-fable-5-1",
     "claude-opus-4-8",
     "claude-opus-4-7",
     "claude-opus-4-6",
+    "claude-opus-5",
+    "claude-sonnet-5",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
     "gpt-5.6-luna",
@@ -241,6 +244,39 @@ THINKING_MODELS = {
     "mimo-v2.5-pro",
     "minimax-m3",
 }
+
+
+# Anthropic models whose native API takes adaptive thinking (thinking.type
+# "adaptive" plus output_config.effort) instead of budget_tokens. Only
+# 4.5-and-earlier models still accept budget_tokens.
+_ADAPTIVE_THINKING_PREFIXES = (
+    "claude-fable-5",
+    "claude-mythos-5",
+    "claude-opus-5",
+    "claude-opus-4-6",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-sonnet-5",
+    "claude-sonnet-4-6",
+)
+
+
+def anthropic_uses_adaptive_thinking(model: str) -> bool:
+    """True for Anthropic models that reject budget_tokens in favor of adaptive thinking."""
+    name = model.rsplit("/", 1)[-1].lower()
+    return name.startswith(_ADAPTIVE_THINKING_PREFIXES)
+
+
+def openrouter_model_id(model: str) -> str:
+    """Spell an Anthropic id the way OpenRouter lists it (dotted minor version)."""
+    if not (model.startswith("anthropic/") or model.startswith("claude")):
+        return model
+    prefix, _, bare = model.rpartition("/")
+    parts = bare.split("-")
+    if len(parts) >= 2 and parts[-1].isdigit() and parts[-2].isdigit():
+        parts = [*parts[:-2], f"{parts[-2]}.{parts[-1]}"]
+    ident = "-".join(parts)
+    return f"{prefix}/{ident}" if prefix else ident
 
 
 def is_thinking_model(model: str) -> bool:

@@ -1,3 +1,4 @@
+from quorate.config import _display_name
 from quorate.council_seat_assay import (
     CASES,
     FABLE,
@@ -9,6 +10,11 @@ from quorate.council_seat_assay import (
     parse_pairwise,
     routing_decision,
 )
+
+
+def test_fable_judge_entry_uses_new_model_and_display_name():
+    assert FABLE.model == "anthropic/claude-fable-5-1"
+    assert FABLE.name == _display_name(FABLE.model) == "Claude-Fable-5-1"
 
 
 def test_suite_has_twenty_distinct_cases():

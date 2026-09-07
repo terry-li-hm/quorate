@@ -7,12 +7,14 @@ import httpx
 
 from quorate import api
 from quorate.api import (
+    _anthropic,
     _antigravity_model,
     _detect_provider,
     _diagnostic_code,
     _fireworks_us_api,
     _kimi_cli_env,
     _kimi_code_api,
+    _openrouter,
     _parse_kimi_stream,
     _strip_think,
     _subscription_cli_env,
@@ -553,6 +555,124 @@ def test_subscription_cli_environment_excludes_provider_secrets(monkeypatch):
     assert "FIREWORKS_API_KEY" not in environment
     assert "QUORATE_FIREWORKS_KEY" not in environment
     assert _kimi_cli_env() == environment
+
+
+def test_anthropic_sends_adaptive_thinking_for_claude_5_family():
+    bodies = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "content": [{"type": "text", "text": "answer"}],
+                "usage": {"input_tokens": 12, "output_tokens": 4},
+            },
+        )
+
+    async def run(model: str) -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            await _anthropic(
+                client,
+                "anthropic-key",
+                model,
+                [Message.user("question")],
+                128,
+                10,
+                ReasoningEffort.HIGH,
+            )
+
+    asyncio.run(run("anthropic/claude-opus-5"))
+    asyncio.run(run("anthropic/claude-fable-5-1"))
+
+    assert [body["model"] for body in bodies] == ["claude-opus-5", "claude-fable-5-1"]
+    for body in bodies:
+        assert body["thinking"] == {"type": "adaptive"}
+        assert body["output_config"] == {"effort": "high"}
+        assert "budget_tokens" not in body["thinking"]
+        assert body["max_tokens"] == 4096
+
+
+def test_anthropic_adaptive_models_omit_thinking_without_effort():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert "thinking" not in body
+        assert "output_config" not in body
+        assert body["max_tokens"] == 4096
+        return httpx.Response(200, json={"content": [{"type": "text", "text": "answer"}]})
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await _anthropic(
+                client,
+                "anthropic-key",
+                "anthropic/claude-opus-5",
+                [Message.user("question")],
+                128,
+                10,
+                None,
+            )
+
+    result, _tokens = asyncio.run(run())
+    assert result == "answer"
+
+
+def test_anthropic_keeps_budget_tokens_for_legacy_models():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body == {
+            "model": "claude-haiku-4-5",
+            "messages": [{"role": "user", "content": "question"}],
+            "max_tokens": 34000,
+            "thinking": {"type": "enabled", "budget_tokens": 32000},
+        }
+        return httpx.Response(
+            200,
+            json={"content": [{"type": "text", "text": "answer"}]},
+        )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await _anthropic(
+                client,
+                "anthropic-key",
+                "anthropic/claude-haiku-4-5",
+                [Message.user("question")],
+                128,
+                10,
+                ReasoningEffort.HIGH,
+            )
+
+    result, _tokens = asyncio.run(run())
+    assert result == "answer"
+
+
+def test_openrouter_body_uses_dotted_anthropic_ids():
+    bodies = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": "answer"}}]})
+
+    async def run(model: str) -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            await _openrouter(
+                client,
+                "openrouter-key",
+                model,
+                [Message.user("question")],
+                128,
+                10,
+                None,
+            )
+
+    asyncio.run(run("anthropic/claude-fable-5-1"))
+    asyncio.run(run("anthropic/claude-opus-5"))
+
+    assert [body["model"] for body in bodies] == [
+        "anthropic/claude-fable-5.1",
+        "anthropic/claude-opus-5",
+    ]
 
 
 class TestQuorumHealth:
