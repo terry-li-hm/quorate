@@ -44,13 +44,13 @@ if ! /Users/terry/.local/bin/quorate-core benchmark --json >"$output" 2>&1; then
   exit 1
 fi
 
-status=$(
+benchmark_status=$(
   /usr/bin/python3 -c \
     'import json,sys; print(json.load(open(sys.argv[1]))["result"]["status"])' \
     "$output"
 )
 
-if [[ "$status" != "healthy" ]]; then
+if [[ "$benchmark_status" != "healthy" ]]; then
   cat "$output"
 fi
 
