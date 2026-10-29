@@ -34,8 +34,9 @@ from quorate.config import (
     openrouter_model_id,
 )
 
-# Type alias for provider function returns: (content, {tokens_in, tokens_out} | None)
-type ProviderResult = tuple[str, dict[str, int] | None]
+# Type alias for provider function returns: (content, token dict | None). The
+# dict carries token counts and may carry flags such as google's "truncated".
+type ProviderResult = tuple[str, dict[str, int | bool] | None]
 
 THINK_RE = re.compile(r"(?s)<think>.*?</think>")
 KIMI_CODE_USER_AGENT = "quorate"
@@ -51,6 +52,10 @@ def _diagnostic_code(content: str) -> str:
     http_status = re.search(r"http\s+(\d{3})", lower)
     if http_status:
         return f"http_{http_status.group(1)}"
+    if "no verified label" in lower:
+        return "unmapped_model"
+    if "max_tokens" in lower:
+        return "max_tokens"
     if "credit balance" in lower or "insufficient credit" in lower:
         return "credits"
     if "timed out" in lower or "timeout" in lower:
@@ -330,15 +335,21 @@ async def _google(
             contents.append({"role": "user", "parts": [{"text": msg.content}]})
         elif msg.role == "assistant":
             contents.append({"role": "model", "parts": [{"text": msg.content}]})
-    gen_config: dict = {"maxOutputTokens": max_tokens}
-    if effort:
-        gen_config["thinkingConfig"] = {"thinkingBudget": effort.google_budget()}
+    # Gemini's thinking tokens count against maxOutputTokens, so the cap must
+    # cover the reasoning budget plus the caller's visible-answer allowance.
+    budget = (effort or ReasoningEffort.MEDIUM).google_budget()
+    gen_config: dict = {
+        "maxOutputTokens": max_tokens + budget,
+        "thinkingConfig": {"thinkingBudget": budget},
+    }
     body: dict = {"contents": contents, "generationConfig": gen_config}
     if sys_text:
         body["systemInstruction"] = {"parts": [{"text": sys_text}]}
-    url = f"{GOOGLE_AI_STUDIO_URL}/{bare}:generateContent?key={api_key}"
+    url = f"{GOOGLE_AI_STUDIO_URL}/{bare}:generateContent"
     try:
-        resp = await client.post(url, json=body, timeout=timeout)
+        resp = await client.post(
+            url, headers={"x-goog-api-key": api_key}, json=body, timeout=timeout
+        )
     except (httpx.TimeoutException, httpx.ConnectError) as exc:
         return f"[Error: google {bare}: {exc}]", None
     if resp.status_code != 200:
@@ -357,7 +368,15 @@ async def _google(
     )
     candidates = data.get("candidates", [])
     parts = (candidates[0].get("content") or {}).get("parts", []) if candidates else []
-    text = (parts[0].get("text", "") if parts else "").strip()
+    # Thought parts carry private reasoning; join only the visible-answer parts.
+    text = "".join(part.get("text", "") for part in parts if not part.get("thought")).strip()
+    if candidates and candidates[0].get("finishReason") == "MAX_TOKENS":
+        if text:
+            if tokens is None:
+                tokens = {}
+            tokens["truncated"] = True
+            return text, tokens
+        return f"[Error: google {bare}: max_tokens before visible text]", None
     return (text if text else f"[No response from google {bare}]"), tokens
 
 
@@ -670,14 +689,20 @@ async def _kimi_code_prompt(
     return (result if result else f"[No response from Kimi Code {bare}]"), None
 
 
-def _antigravity_model(model: str, effort: ReasoningEffort | None) -> str:
-    """Map a Quorate Google model to an Antigravity model label."""
+def _antigravity_model(model: str, effort: ReasoningEffort | None) -> str | None:
+    """Map a Quorate Google model to a verified Antigravity model label.
+
+    Unmapped IDs return None so callers fail closed instead of silently
+    rerunning the request as Gemini 3.5 Flash.
+    """
     bare = model.removeprefix("google/")
-    level = (effort or ReasoningEffort.MEDIUM).value.title()
-    if "gemini-3.1-pro" in bare:
-        level = "Low" if level == "Low" else "High"
+    if bare == "gemini-3.5-flash":
+        level = (effort or ReasoningEffort.MEDIUM).value.title()
+        return f"Gemini 3.5 Flash ({level})"
+    if bare in ("gemini-3.1-pro", "gemini-3.1-pro-preview"):
+        level = "Low" if effort is ReasoningEffort.LOW else "High"
         return f"Gemini 3.1 Pro ({level})"
-    return f"Gemini 3.5 Flash ({level})"
+    return None
 
 
 async def _antigravity_prompt(
@@ -688,6 +713,9 @@ async def _antigravity_prompt(
 ) -> ProviderResult:
     """Query Gemini through the Antigravity subscription CLI."""
     label = _antigravity_model(model, effort)
+    if label is None:
+        bare = model.removeprefix("google/")
+        return f"[Error: Antigravity has no verified label for {bare}]", None
     sections = []
     for msg in messages:
         text = msg.content.strip()
@@ -831,7 +859,7 @@ async def query_model(
     def _result(
         content: str,
         used_provider: str,
-        tokens: dict[str, int] | None = None,
+        tokens: dict[str, int | bool] | None = None,
     ) -> ModelCallResult:
         return ModelCallResult(
             name=entry.name,
@@ -944,6 +972,8 @@ async def query_model(
                 effort,
             )
             if not is_error(content):
+                if tokens and tokens.get("truncated"):
+                    diagnostics.append("google-ai-studio:max_tokens")
                 return _result(content, "google-ai-studio", tokens)
             _record_failure("google-ai-studio", content)
         else:

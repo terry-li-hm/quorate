@@ -114,9 +114,10 @@ def resolved_council() -> list[ModelEntry]:
     model_4 = _env("CONSILIUM_MODEL_M4") or "kimi-code/k3"
     model_5 = _env("CONSILIUM_MODEL_M5") or "z-ai/glm-5.2"
     model_6 = _env("CONSILIUM_MODEL_M6") or "deepseek/deepseek-v4-pro"
+    model_7 = _env("CONSILIUM_MODEL_M7")
     xai_model = _env("CONSILIUM_XAI_MODEL") or XAI_DEFAULT_MODEL
 
-    return [
+    seats = [
         ModelEntry(_display_name(model_1), model_1),
         ModelEntry(_display_name(model_2), model_2),
         ModelEntry(_xai_label(xai_model), model_3),
@@ -124,6 +125,10 @@ def resolved_council() -> list[ModelEntry]:
         ModelEntry(_display_name(model_5), model_5),
         ModelEntry(_display_name(model_6), model_6),
     ]
+    # Dormant seventh seat: no default, opt-in only via CONSILIUM_MODEL_M7.
+    if model_7:
+        seats.append(ModelEntry(_display_name(model_7), model_7))
+    return seats
 
 
 def resolved_judge(cli_override: str | None = None) -> str:

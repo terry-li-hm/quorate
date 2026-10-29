@@ -29,6 +29,8 @@ def _default_usage_dir() -> Path:
 PRICES: dict[str, tuple[float, float]] = {
     "gemini-3.1-pro-preview": (2.00, 12.00),
     "gemini-3.5-flash": (1.50, 9.00),
+    # List price; Google's introductory 2.00/10.00 ends on 30 November 2026.
+    "gemini-4-argon": (4.00, 20.00),
     "gpt-5.6-sol": (5.00, 30.00),
     "gpt-5.5": (2.50, 10.00),
     "claude-fable-5": (10.00, 50.00),

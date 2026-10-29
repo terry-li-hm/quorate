@@ -3,6 +3,7 @@
 from quorate.config import (
     CLASSIFIER_MODEL,
     Message,
+    ModelEntry,
     ReasoningEffort,
     _display_name,
     _normalize_model,
@@ -262,3 +263,27 @@ class TestCouncilResolution:
             "z-ai/glm-5.2",
             "deepseek/deepseek-v4-pro",
         ]
+
+
+class TestSeventhCouncilSeat:
+    def test_seventh_seat_is_dormant_by_default(self, monkeypatch):
+        monkeypatch.delenv("CONSILIUM_MODEL_M7", raising=False)
+        council = resolved_council()
+        assert len(council) == 6
+        assert all(not entry.model.startswith("google/") for entry in council)
+
+        monkeypatch.setenv("CONSILIUM_MODEL_M7", "   ")
+        assert len(resolved_council()) == 6
+
+    def test_seventh_seat_override_appends_gemini_entry(self, monkeypatch):
+        monkeypatch.setenv("CONSILIUM_MODEL_M7", "google/gemini-4-argon")
+        council = resolved_council()
+        assert len(council) == 7
+        assert council[-1] == ModelEntry("Gemini-4-Argon", "google/gemini-4-argon")
+
+    def test_seventh_seat_joins_quick_brainstorm_and_benchmark_rosters(self, monkeypatch):
+        monkeypatch.setenv("CONSILIUM_MODEL_M7", "google/gemini-4-argon")
+        assert len(quick_models()) == 8
+        assert len(brainstorm_models()) == 9
+        benchmark = [entry.model for entry in benchmark_models()]
+        assert benchmark.count("google/gemini-4-argon") == 1

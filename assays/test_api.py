@@ -9,9 +9,11 @@ from quorate import api
 from quorate.api import (
     _anthropic,
     _antigravity_model,
+    _antigravity_prompt,
     _detect_provider,
     _diagnostic_code,
     _fireworks_us_api,
+    _google,
     _kimi_cli_env,
     _kimi_code_api,
     _openrouter,
@@ -93,6 +95,262 @@ class TestAntigravityModel:
             _antigravity_model("google/gemini-3.1-pro-preview", ReasoningEffort.LOW)
             == "Gemini 3.1 Pro (Low)"
         )
+
+
+def test_antigravity_model_returns_none_for_unmapped_google_ids():
+    unmapped = (
+        "google/gemini-4-argon",
+        "google/gemini-4-carbon",
+        "google/gemini-3.5-flash-lite",
+        "google/gemini-3.8-flash",
+    )
+    for model in unmapped:
+        assert _antigravity_model(model, None) is None
+        assert _antigravity_model(model, ReasoningEffort.HIGH) is None
+    assert _antigravity_model("google/gemini-3.5-flash", None) == "Gemini 3.5 Flash (Medium)"
+    assert (
+        _antigravity_model("google/gemini-3.5-flash", ReasoningEffort.LOW)
+        == "Gemini 3.5 Flash (Low)"
+    )
+    assert (
+        _antigravity_model("google/gemini-3.1-pro", ReasoningEffort.MEDIUM)
+        == "Gemini 3.1 Pro (High)"
+    )
+    assert (
+        _antigravity_model("google/gemini-3.1-pro-preview", ReasoningEffort.LOW)
+        == "Gemini 3.1 Pro (Low)"
+    )
+
+
+def test_antigravity_prompt_refuses_unmapped_model_without_subprocess(monkeypatch):
+    async def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("unmapped model must not spawn a subprocess")
+
+    monkeypatch.setattr(api.asyncio, "create_subprocess_exec", fail_if_called)
+
+    async def run():
+        return await _antigravity_prompt(
+            "google/gemini-4-argon",
+            [Message.user("question")],
+            10,
+            None,
+        )
+
+    result, tokens = asyncio.run(run())
+    assert result == "[Error: Antigravity has no verified label for gemini-4-argon]"
+    assert tokens is None
+    assert _diagnostic_code(result) == "unmapped_model"
+
+
+def test_google_sends_key_in_header_not_url():
+    captured: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [{"content": {"parts": [{"text": "answer"}]}, "finishReason": "STOP"}]
+            },
+        )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await _google(
+                client,
+                "google-key",
+                "google/gemini-3.5-flash",
+                [Message.user("question")],
+                128,
+                10,
+                None,
+            )
+
+    result, _tokens = asyncio.run(run())
+    assert result == "answer"
+    assert len(captured) == 1
+    assert captured[0].headers["x-goog-api-key"] == "google-key"
+    assert "google-key" not in str(captured[0].url)
+    assert "key=" not in str(captured[0].url)
+
+
+def test_google_adds_thinking_budget_to_output_cap():
+    bodies = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [{"content": {"parts": [{"text": "answer"}]}, "finishReason": "STOP"}]
+            },
+        )
+
+    async def run(effort: ReasoningEffort | None) -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            await _google(
+                client,
+                "google-key",
+                "google/gemini-3.5-flash",
+                [Message.user("question")],
+                1024,
+                10,
+                effort,
+            )
+
+    asyncio.run(run(None))
+    asyncio.run(run(ReasoningEffort.HIGH))
+    asyncio.run(run(ReasoningEffort.LOW))
+
+    assert [
+        (
+            body["generationConfig"]["thinkingConfig"]["thinkingBudget"],
+            body["generationConfig"]["maxOutputTokens"],
+        )
+        for body in bodies
+    ] == [(4096, 5120), (16000, 17024), (512, 1536)]
+
+
+def test_google_joins_text_parts_and_skips_thoughts():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {"text": "private reasoning", "thought": True},
+                                {"text": "Alpha "},
+                                {"text": "beta"},
+                            ]
+                        },
+                        "finishReason": "STOP",
+                    }
+                ]
+            },
+        )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await _google(
+                client,
+                "google-key",
+                "google/gemini-3.5-flash",
+                [Message.user("question")],
+                128,
+                10,
+                None,
+            )
+
+    result, _tokens = asyncio.run(run())
+    assert result == "Alpha beta"
+
+
+def test_google_flags_max_tokens_truncation():
+    async def run(parts: list[dict], usage: dict | None):
+        async def handler(_request: httpx.Request) -> httpx.Response:
+            payload: dict = {
+                "candidates": [{"content": {"parts": parts}, "finishReason": "MAX_TOKENS"}]
+            }
+            if usage is not None:
+                payload["usageMetadata"] = usage
+            return httpx.Response(200, json=payload)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await _google(
+                client,
+                "google-key",
+                "google/gemini-4-argon",
+                [Message.user("question")],
+                128,
+                10,
+                None,
+            )
+
+    text, tokens = asyncio.run(
+        run([{"text": "partial answer"}], {"promptTokenCount": 12, "candidatesTokenCount": 128})
+    )
+    assert text == "partial answer"
+    assert tokens == {"tokens_in": 12, "tokens_out": 128, "truncated": True}
+
+    text, tokens = asyncio.run(run([{"text": "partial"}], None))
+    assert text == "partial"
+    assert tokens == {"truncated": True}
+
+    text, tokens = asyncio.run(run([{"text": "private reasoning", "thought": True}], None))
+    assert text == "[Error: google gemini-4-argon: max_tokens before visible text]"
+    assert tokens is None
+    assert _diagnostic_code(text) == "max_tokens"
+
+
+def test_query_model_routes_unmapped_google_seat_to_ai_studio(monkeypatch):
+    async def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("unmapped Google seat must not spawn a subprocess")
+
+    monkeypatch.setattr(api.asyncio, "create_subprocess_exec", fail_if_called)
+
+    urls: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        urls.append(str(request.url))
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [{"content": {"parts": [{"text": "answer"}]}, "finishReason": "STOP"}]
+            },
+        )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await api.query_model(
+                client,
+                {"google": "google-key"},
+                ModelEntry("Gemini-4-Argon", "google/gemini-4-argon"),
+                [Message.user("question")],
+            )
+
+    result = asyncio.run(run())
+    assert len(urls) == 1
+    assert "gemini-4-argon:generateContent" in urls[0]
+    assert result.provider == "google-ai-studio"
+    assert result.model_id == "gemini-4-argon"
+    assert result.response == "answer"
+    assert result.diagnostics == ("antigravity-cli:unmapped_model",)
+
+
+def test_query_model_records_google_truncation_diagnostic():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "content": {"parts": [{"text": "partial answer"}]},
+                        "finishReason": "MAX_TOKENS",
+                    }
+                ],
+                "usageMetadata": {"promptTokenCount": 12, "candidatesTokenCount": 128},
+            },
+        )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await api.query_model(
+                client,
+                {"google": "google-key"},
+                ModelEntry("Gemini-4-Argon", "google/gemini-4-argon"),
+                [Message.user("question")],
+            )
+
+    result = asyncio.run(run())
+    assert result.provider == "google-ai-studio"
+    assert result.response == "partial answer"
+    assert not result.is_error
+    assert result.diagnostics == (
+        "antigravity-cli:unmapped_model",
+        "google-ai-studio:max_tokens",
+    )
 
 
 class TestSafeDiagnostics:
