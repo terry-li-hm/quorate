@@ -74,6 +74,9 @@ Council seat: Claude Opus 5. Judge: Claude Fable 5.1, with GPT-5.6 Sol through C
 - `codex exec` needs `-c 'model_reasoning_effort="xhigh"'` and `--skip-git-repo-check`
 - `codex exec` strips an OpenRouter-style `-pro` suffix. Use the actual Codex model ID, currently `gpt-5.6-sol`; quick mode requests medium reasoning while council retains the CLI's highest default when no effort is supplied.
 - The standalone Gemini CLI no longer supports the individual subscription client. Google models use Antigravity in sandboxed plan mode before falling back to Google AI Studio.
+- Antigravity maps only exact, verified model IDs. Any other Google model skips it with `antigravity-cli:unmapped_model` and goes to Google AI Studio under its own ID; add a label only after `agy models` lists it.
+- Gemini's thinking tokens count against `maxOutputTokens`, so the Google client adds the thinking budget to the caller's visible-answer cap. A `MAX_TOKENS` finish surfaces as `google-ai-studio:max_tokens`.
+- `CONSILIUM_MODEL_M7` adds an optional seventh council seat with no default. `src/quorate/seventh_seat_assay.py` is its admission assay; its preflight stops a run as invalid when the candidate or either judge is unreachable.
 - Local workspace mode never falls back: it uses only Codex CLI and Gemini through Antigravity, runs both from isolated temporary directories, and never passes either client the workspace path.
 - Local workspace snapshots are external disclosures. Select only public, synthetic, or deliberately sanitized directories; `QUORATE_PROTECTED_ROOTS` and the snapshot limits are guardrails, not content classification.
 - Thinking models need longer timeouts (180s+) in parallel execution

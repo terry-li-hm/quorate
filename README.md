@@ -38,6 +38,8 @@ Brainstorm mode uses the six council families plus Gemini 3.5 Flash and MiniMax 
 
 Any seat is overridable via `CONSILIUM_MODEL_M1`…`M6`, `CONSILIUM_MODEL_JUDGE`, `CONSILIUM_MODEL_JUDGE_FALLBACK`, `CONSILIUM_MODEL_CRITIQUE`, and `CONSILIUM_MODEL_CRITIQUE_FALLBACK`.
 
+`CONSILIUM_MODEL_M7` adds an optional seventh council seat. It has no default, so the council stays at six seats until a model passes the seventh-seat assay and enters a trial. The [Gemini seventh-seat candidate](docs/experiments/2026-10-29-gemini-seventh-seat-candidate.md) records the route gate and the locked admission rule.
+
 Fireworks' exact US-only K3 router is implemented as an inactive candidate.
 Selecting `accounts/fireworks/routers/kimi-k3-us` calls Fireworks directly and
 requests its documented Priority serving tier for higher reliability. It fails
@@ -238,7 +240,9 @@ for the membership boundary and API-route decision, the
 [2026-07-29 Fireworks US K3 route candidate](docs/experiments/2026-07-29-fireworks-us-k3-route-candidate.md)
 for the dormant direct-route contract and predeclared admission gate, the
 [2026-07-16 DeepSeek seat selection](docs/experiments/2026-07-16-deepseek-seat-selection.md)
-for the evidence behind the sixth council seat, and the
+for the evidence behind the sixth council seat, the
+[2026-10-29 Gemini seventh-seat candidate](docs/experiments/2026-10-29-gemini-seventh-seat-candidate.md)
+for the route gate, the Google thinking-budget fix, and the predeclared seventh-seat assay, and the
 [2026-07-16 brainstorm mode validation](docs/experiments/2026-07-16-brainstorm-mode.md)
 for the divergent ideation architecture.
 
