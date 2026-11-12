@@ -60,6 +60,9 @@ class TestDisplayName:
     def test_claude_fable_5_1(self):
         assert _display_name("anthropic/claude-fable-5-1") == "Claude-Fable-5-1"
 
+    def test_claude_fable_5_2(self):
+        assert _display_name("anthropic/claude-fable-5-2") == "Claude-Fable-5-2"
+
 
 class TestModelAliases:
     def test_sonnet_alias(self):
@@ -69,10 +72,10 @@ class TestModelAliases:
         assert _normalize_model("opus") == "anthropic/claude-opus-5"
 
     def test_fable_alias(self):
-        assert _normalize_model("fable") == "anthropic/claude-fable-5-1"
+        assert _normalize_model("fable") == "anthropic/claude-fable-5-2"
 
     def test_alias_matching_ignores_case_and_padding(self):
-        assert _normalize_model("  FABLE ") == "anthropic/claude-fable-5-1"
+        assert _normalize_model("  FABLE ") == "anthropic/claude-fable-5-2"
 
 
 class TestIsThinkingModel:
@@ -98,7 +101,7 @@ class TestIsThinkingModel:
         assert is_thinking_model("accounts/fireworks/routers/kimi-k3-us") is True
 
     def test_claude_5_family(self):
-        for model in ("claude-fable-5-1", "claude-opus-5", "claude-sonnet-5"):
+        for model in ("claude-fable-5-1", "claude-fable-5-2", "claude-opus-5", "claude-sonnet-5"):
             assert is_thinking_model(f"anthropic/{model}") is True
 
     def test_non_thinking(self):
@@ -110,6 +113,7 @@ class TestAnthropicAdaptiveThinking:
         for model in (
             "anthropic/claude-fable-5",
             "anthropic/claude-fable-5-1",
+            "anthropic/claude-fable-5-2",
             "anthropic/claude-mythos-5",
             "anthropic/claude-opus-5",
             "anthropic/claude-sonnet-5",
@@ -117,7 +121,7 @@ class TestAnthropicAdaptiveThinking:
             assert anthropic_uses_adaptive_thinking(model) is True
 
     def test_bare_claude_ids_are_adaptive(self):
-        for model in ("claude-fable-5-1", "claude-opus-5", "claude-sonnet-4-6"):
+        for model in ("claude-fable-5-1", "claude-fable-5-2", "claude-opus-5", "claude-sonnet-4-6"):
             assert anthropic_uses_adaptive_thinking(model) is True
 
     def test_opus_and_sonnet_4_6_through_4_8_are_adaptive(self):
@@ -141,6 +145,7 @@ class TestAnthropicAdaptiveThinking:
 class TestOpenRouterModelId:
     def test_two_part_versions_become_dotted(self):
         assert openrouter_model_id("anthropic/claude-fable-5-1") == "anthropic/claude-fable-5.1"
+        assert openrouter_model_id("anthropic/claude-fable-5-2") == "anthropic/claude-fable-5.2"
         assert openrouter_model_id("anthropic/claude-haiku-4-5") == "anthropic/claude-haiku-4.5"
         assert openrouter_model_id("anthropic/claude-opus-4-8") == "anthropic/claude-opus-4.8"
 
@@ -150,6 +155,7 @@ class TestOpenRouterModelId:
 
     def test_bare_claude_id(self):
         assert openrouter_model_id("claude-fable-5-1") == "claude-fable-5.1"
+        assert openrouter_model_id("claude-fable-5-2") == "claude-fable-5.2"
 
     def test_non_anthropic_ids_are_verbatim(self):
         assert openrouter_model_id("openai/gpt-5.6-sol") == "openai/gpt-5.6-sol"
@@ -236,7 +242,7 @@ class TestCouncilResolution:
         assert len(brainstorm_models()) == 8
 
     def test_judge_default(self):
-        assert resolved_judge() == "anthropic/claude-fable-5-1"
+        assert resolved_judge() == "anthropic/claude-fable-5-2"
 
     def test_gemini_alias_uses_stable_judge(self, monkeypatch):
         monkeypatch.setenv("CONSILIUM_MODEL_JUDGE", "gemini")

@@ -43,7 +43,7 @@ scripts/install-local.sh
 |-------|----------|-------------|
 | google/gemini-3.5-flash | Antigravity / Google AI Studio | Gemini-3.5-Flash |
 | openai/gpt-5.6-sol | Codex exec | GPT-5.6-Sol |
-| anthropic/claude-fable-5-1 | claude --print | Claude-Fable-5-1 |
+| anthropic/claude-fable-5-2 | claude --print | Claude-Fable-5-2 |
 | anthropic/claude-opus-5 | claude --print | Claude-Opus-5 |
 | x-ai/grok-4.5 | xAI native | Grok-4.5 |
 | kimi-code/k3 | Kimi Code subscription | Kimi-K3 |
@@ -51,7 +51,7 @@ scripts/install-local.sh
 | deepseek/deepseek-v4-pro | OpenRouter | DeepSeek-V4-Pro |
 | minimax/minimax-m3 | OpenRouter | MiniMax-M3 |
 
-Council seat: Claude Opus 5. Judge: Claude Fable 5.1, with GPT-5.6 Sol through Codex as the fallback. Critic: Gemini 3.5 Flash, with Claude Opus 5 as the fallback.
+Council seat: Claude Opus 5. Judge: Claude Fable 5.2, with GPT-5.6 Sol through Codex as the fallback. Critic: Gemini 3.5 Flash, with Claude Opus 5 as the fallback.
 
 ## Runtime expectations
 

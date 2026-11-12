@@ -841,9 +841,9 @@ def test_anthropic_sends_adaptive_thinking_for_claude_5_family():
             )
 
     asyncio.run(run("anthropic/claude-opus-5"))
-    asyncio.run(run("anthropic/claude-fable-5-1"))
+    asyncio.run(run("anthropic/claude-fable-5-2"))
 
-    assert [body["model"] for body in bodies] == ["claude-opus-5", "claude-fable-5-1"]
+    assert [body["model"] for body in bodies] == ["claude-opus-5", "claude-fable-5-2"]
     for body in bodies:
         assert body["thinking"] == {"type": "adaptive"}
         assert body["output_config"] == {"effort": "high"}
@@ -924,11 +924,11 @@ def test_openrouter_body_uses_dotted_anthropic_ids():
                 None,
             )
 
-    asyncio.run(run("anthropic/claude-fable-5-1"))
+    asyncio.run(run("anthropic/claude-fable-5-2"))
     asyncio.run(run("anthropic/claude-opus-5"))
 
     assert [body["model"] for body in bodies] == [
-        "anthropic/claude-fable-5.1",
+        "anthropic/claude-fable-5.2",
         "anthropic/claude-opus-5",
     ]
 

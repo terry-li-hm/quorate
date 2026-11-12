@@ -13,8 +13,8 @@ from quorate.council_seat_assay import (
 
 
 def test_fable_judge_entry_uses_new_model_and_display_name():
-    assert FABLE.model == "anthropic/claude-fable-5-1"
-    assert FABLE.name == _display_name(FABLE.model) == "Claude-Fable-5-1"
+    assert FABLE.model == "anthropic/claude-fable-5-2"
+    assert FABLE.name == _display_name(FABLE.model) == "Claude-Fable-5-2"
 
 
 def test_suite_has_twenty_distinct_cases():

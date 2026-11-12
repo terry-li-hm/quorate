@@ -19,14 +19,14 @@ def test_decision_parser_requires_exactly_one_marker():
 
 
 def test_fable_entry_uses_new_model_and_display_name():
-    assert FABLE.model == "anthropic/claude-fable-5-1"
-    assert FABLE.name == _display_name(FABLE.model) == "Claude-Fable-5-1"
+    assert FABLE.model == "anthropic/claude-fable-5-2"
+    assert FABLE.name == _display_name(FABLE.model) == "Claude-Fable-5-2"
 
 
 def test_attempt_row_does_not_retain_response():
     result = ModelCallResult(
         name=FABLE.name,
-        model_id="claude-fable-5-1",
+        model_id="claude-fable-5-2",
         response="Synthetic reasoning\nFINAL_DECISION: A",
         provider="test",
         latency_s=1.25,

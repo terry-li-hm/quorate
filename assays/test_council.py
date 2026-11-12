@@ -81,7 +81,7 @@ def test_council_uses_subscription_critic_fallback(monkeypatch):
         ]
 
     async def fake_query_judge(model, *_args, **_kwargs):
-        if model == "anthropic/claude-fable-5-1":
+        if model == "anthropic/claude-fable-5-2":
             return "Primary synthesis"
         if model == "google/gemini-3.5-flash":
             return "[Error: preferred critic unavailable]"

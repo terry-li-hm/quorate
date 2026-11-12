@@ -60,6 +60,8 @@ class TestPriceLookup:
         # OpenRouter-fallback cost estimates off $0.
         assert runlog.price_for("anthropic/claude-opus-5") == (5.00, 25.00)
         assert runlog.price_for("claude-fable-5-1") == (10.00, 50.00)
+        assert runlog.price_for("claude-fable-5-2") == (8.00, 40.00)
+        assert runlog.price_for("anthropic/claude-fable-5-2") == (8.00, 40.00)
         assert runlog.price_for("claude-sonnet-5") == (2.00, 10.00)
 
 

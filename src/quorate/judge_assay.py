@@ -17,7 +17,7 @@ from quorate.api import run_parallel
 from quorate.config import Message, ModelCallResult, ModelEntry, ReasoningEffort
 
 SUITE_VERSION = "2026-07-17"
-FABLE = ModelEntry("Claude-Fable-5-1", "anthropic/claude-fable-5-1")
+FABLE = ModelEntry("Claude-Fable-5-2", "anthropic/claude-fable-5-2")
 GPT = ModelEntry("GPT-5.6-Sol", "openai/gpt-5.6-sol")
 MODELS = (FABLE, GPT)
 FINAL_MARKER = re.compile(r"FINAL_DECISION\s*:\s*([AB])\b", re.IGNORECASE)

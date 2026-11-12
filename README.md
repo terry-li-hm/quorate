@@ -32,7 +32,7 @@ The six council debaters (`resolved_council()` in `config.py`):
 | GLM-5.2 | ZhiPu API → OpenRouter |
 | DeepSeek V4 Pro | OpenRouter (DeepSeek) |
 
-Judge: Claude Fable 5.1 (Claude CLI → Anthropic API → OpenRouter), with GPT-5.6 Sol through the Codex subscription as the cross-vendor fallback. Critic: Gemini 3.5 Flash (Antigravity CLI → Google AI Studio → OpenRouter), with Claude Opus 5 as its fallback.
+Judge: Claude Fable 5.2 (Claude CLI → Anthropic API → OpenRouter), with GPT-5.6 Sol through the Codex subscription as the cross-vendor fallback. Critic: Gemini 3.5 Flash (Antigravity CLI → Google AI Studio → OpenRouter), with Claude Opus 5 as its fallback.
 
 Brainstorm mode uses the six council families plus Gemini 3.5 Flash and MiniMax M3. Claude Fable curates the resulting ideas but does not generate them.
 

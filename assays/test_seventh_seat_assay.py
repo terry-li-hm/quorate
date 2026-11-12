@@ -204,7 +204,7 @@ def test_run_assay_with_fake_runners_scores_and_retains_no_text():
     assert report["cases"] == 20
     assert report["responses_retained"] is False
     assert report["judges"] == [
-        {"name": "Claude-Fable-5-1", "model": "anthropic/claude-fable-5-1"},
+        {"name": "Claude-Fable-5-2", "model": "anthropic/claude-fable-5-2"},
         {"name": "GPT-5.6-Sol", "model": "openai/gpt-5.6-sol"},
     ]
     assert len(report["preflight"]) == 3
@@ -267,7 +267,7 @@ def test_default_judges_follow_council_judge_and_fallback(monkeypatch):
     monkeypatch.delenv("CONSILIUM_MODEL_JUDGE_FALLBACK")
     default = assay_judges()
     assert [(judge.name, judge.model) for judge in default] == [
-        ("Claude-Fable-5-1", "anthropic/claude-fable-5-1"),
+        ("Claude-Fable-5-2", "anthropic/claude-fable-5-2"),
         ("GPT-5.6-Sol", "openai/gpt-5.6-sol"),
     ]
 
@@ -320,12 +320,12 @@ def test_preflight_failure_returns_invalid_run_without_seat_queries():
 
     calls = {"seat": [], "judge": []}
     seat_runner = _counting_runner(calls, "seat")
-    judge_runner = _counting_runner(calls, "judge", fail_preflight_for="anthropic/claude-fable-5-1")
+    judge_runner = _counting_runner(calls, "judge", fail_preflight_for="anthropic/claude-fable-5-2")
 
     report = asyncio.run(run_assay(seat_runner=seat_runner, judge_runner=judge_runner))
 
     assert report["decision"]["reason"] == (
-        "Preflight failed for: Claude-Fable-5-1. No seat or judge queries were made."
+        "Preflight failed for: Claude-Fable-5-2. No seat or judge queries were made."
     )
     assert len(calls["seat"]) == 1
     assert all(c[1] == PREFLIGHT_PROMPT for c in calls["seat"])

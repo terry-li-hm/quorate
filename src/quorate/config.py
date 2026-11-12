@@ -75,7 +75,7 @@ ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 
 # Default models
-JUDGE_MODEL = "anthropic/claude-fable-5-1"
+JUDGE_MODEL = "anthropic/claude-fable-5-2"
 JUDGE_FALLBACK_MODEL = "openai/gpt-5.6-sol"
 CRITIQUE_MODEL = "google/gemini-3.5-flash"
 CRITIQUE_FALLBACK_MODEL = "anthropic/claude-opus-5"
@@ -99,7 +99,7 @@ def _normalize_model(value: str) -> str:
         case "opus":
             return "anthropic/claude-opus-5"
         case "fable":
-            return "anthropic/claude-fable-5-1"
+            return "anthropic/claude-fable-5-2"
         case "gemini":
             return "google/gemini-3.5-flash"
         case _:
@@ -222,6 +222,7 @@ def _xai_label(model: str) -> str:
 THINKING_MODELS = {
     "claude-fable-5",
     "claude-fable-5-1",
+    "claude-fable-5-2",
     "claude-opus-4-8",
     "claude-opus-4-7",
     "claude-opus-4-6",
