@@ -2,6 +2,18 @@
 
 Model admission is scoped to one role, route, and harness. A model that passes a Quorate council-seat evaluation is not thereby approved for coding, autonomous execution, mTOR, or any other system. Each role needs its own evidence and removal rule.
 
+## Dormant since 16 November 2026
+
+On 16 November 2026 Terry mothballed Quorate. Real councils became rare after August 2026, no run was ever rated for decision value, and upkeep kept landing: the judge broke in October, K3 refused every call for over six weeks before anyone noticed, the critic's Antigravity model label stopped working, and the latest seat assays took over an hour. Stopping maintenance loses nothing that cannot be restored, so the code, installs, run logs, benchmark snapshots and seat line-up stay in place, with Gemini 4 Argon still on trial in seat four.
+
+Two things changed. The monthly seat benchmark, the LaunchAgent `com.vivesca.quorate-monthly-benchmark`, was booted out and disabled with its plist kept. Vivesca's skills stopped routing agents to Quorate, and the `quorate` skill became explicit-only, so it runs only when Terry names it.
+
+To revive Quorate:
+
+1. Re-enable and reload the monthly job with `launchctl enable gui/$(id -u)/com.vivesca.quorate-monthly-benchmark` and then `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.vivesca.quorate-monthly-benchmark.plist`.
+2. Restore the skill routes by reverting or reapplying the Germline commit "receptors: stop offering Quorate; mark it dormant and explicit-only", which returns the `quorate` skill's routing description and triggers and the Quorate routes in the twelve skills that offered it.
+3. Sign Antigravity back in on any host where it has lapsed, because seat four and the critic depend on it, then run `quorate benchmark` and treat any failed canary as a seat review under the rules below.
+
 ## Admission lifecycle
 
 Every production role moves through four stages:

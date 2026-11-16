@@ -4,6 +4,12 @@ Multi-model deliberation CLI — 6 frontier LLMs debate, then judge.
 
 Named after [quorum sensing](https://www.nature.com/articles/s41467-023-37950-7): bacteria pool imperfect estimates to make better collective decisions. quorate does the same with language models.
 
+## Status: dormant since 16 November 2026
+
+Quorate is mothballed. Real use fell away after August 2026, no council was ever rated for decision value, and keeping every seat, the judge and the critic healthy kept costing maintenance time. Nothing has been deleted. The code, the published package, local installs, run logs and benchmark snapshots stay as they are, and Gemini 4 Argon stays in seat four as a trial.
+
+While Quorate is dormant, the monthly seat benchmark does not run and the maintainer's agent skills no longer offer it, so it runs only when the maintainer asks for it by name. Reviving it takes minutes; the steps are in [model role governance](docs/model-role-governance.md#dormant-since-16-november-2026).
+
 ## Install
 
 ```bash
@@ -255,7 +261,8 @@ through `fireworks-us` without diagnostics and with the attested Priority reques
 contract. A selected candidate that is absent from the report fails closed. The
 runner otherwise stays silent when the roster is healthy. The corresponding LaunchAgent runs at
 09:00 on the first day of each month and writes only degraded or failed output to
-`~/logs/quorate-monthly-benchmark.log`.
+`~/logs/quorate-monthly-benchmark.log`. It has been paused since 16 November 2026 while Quorate
+is dormant.
 
 ## How it works
 
