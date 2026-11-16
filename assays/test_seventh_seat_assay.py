@@ -58,6 +58,8 @@ def test_panel_order_is_seeded_and_round_trips():
 
 
 def test_incumbents_exclude_configured_seventh_seat(monkeypatch):
+    # The assay was declared against the roster with K3 in seat four.
+    monkeypatch.setenv("CONSILIUM_MODEL_M4", "kimi-code/k3")
     monkeypatch.setenv("CONSILIUM_MODEL_M7", "google/gemini-4-argon")
     seats = incumbent_seats()
     assert len(seats) == 6
@@ -192,7 +194,9 @@ def _fake_judge_runner(models, messages, max_tokens, timeout, effort):
     return [ModelCallResult(judge.name, judge.model, response, "fake", 7.0)]
 
 
-def test_run_assay_with_fake_runners_scores_and_retains_no_text():
+def test_run_assay_with_fake_runners_scores_and_retains_no_text(monkeypatch):
+    # The assay was declared against the roster with K3 in seat four.
+    monkeypatch.setenv("CONSILIUM_MODEL_M4", "kimi-code/k3")
     report = asyncio.run(
         run_assay(
             seat_runner=_fake_seat_runner,

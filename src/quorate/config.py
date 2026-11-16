@@ -111,7 +111,10 @@ def resolved_council() -> list[ModelEntry]:
     model_1 = _env("CONSILIUM_MODEL_M1") or "openai/gpt-6.1-sol"
     model_2 = _env("CONSILIUM_MODEL_M2") or "anthropic/claude-opus-5-5"
     model_3 = _env("CONSILIUM_MODEL_M3") or "x-ai/grok-4.7"
-    model_4 = _env("CONSILIUM_MODEL_M4") or "kimi-code/k3"
+    # Trial since 16 November 2026: Gemini 4 Argon replaces K3, whose Kimi
+    # membership route has refused every call since at least 1 October. See
+    # docs/experiments/2026-10-29-gemini-seventh-seat-candidate.md.
+    model_4 = _env("CONSILIUM_MODEL_M4") or "google/gemini-4-argon"
     model_5 = _env("CONSILIUM_MODEL_M5") or "z-ai/glm-5.3"
     model_6 = _env("CONSILIUM_MODEL_M6") or "deepseek/deepseek-v4-pro"
     model_7 = _env("CONSILIUM_MODEL_M7")

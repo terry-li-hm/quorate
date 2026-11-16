@@ -46,7 +46,7 @@ scripts/install-local.sh
 | anthropic/claude-fable-5-2 | claude --print | Claude-Fable-5-2 |
 | anthropic/claude-opus-5-5 | claude --print | Claude-Opus-5-5 |
 | x-ai/grok-4.7 | xAI native | Grok-4.7 |
-| kimi-code/k3 | Kimi Code subscription | Kimi-K3 |
+| google/gemini-4-argon | Antigravity / Google AI Studio | Gemini-4-Argon |
 | z-ai/glm-5.3 | ZhiPu native | GLM-5.3 |
 | deepseek/deepseek-v4-pro | OpenRouter | DeepSeek-V4-Pro |
 | minimax/minimax-m3 | OpenRouter | MiniMax-M3 |

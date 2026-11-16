@@ -7,9 +7,9 @@ Date: 2026-10-29
 Argon was assayed on 16 November 2026 and returned `admit-trial`. It cleared all four floors with a median
 latency of 22.2 s and a mean score about twice the incumbent median. See
 [Argon result](#argon-result-16-november-2026) below. Carbon, assayed first that morning, failed only the latency
-floor; see [Carbon result](#carbon-result-16-november-2026). The trial now waits on Terry's yes and on his choice
-between Argon taking K3's place and Argon becoming a seventh seat. The roster and seat defaults are unchanged
-until he decides. Terry asked "run the gemini seat test?" that morning, after the K3 seat was found dead, and
+floor; see [Carbon result](#carbon-result-16-november-2026). Terry then chose to replace K3, and Argon has been
+seat four's trial default since 16 November, after passing the three fixed canaries in that seat.
+See [Seat-four trial](#seat-four-trial-16-november-2026). Terry asked "run the gemini seat test?" that morning, after the K3 seat was found dead, and
 approved the Argon fallback run at about 11:00 HKT. The harness and the admission rule below are unchanged.
 
 What changed since 29 October, all checked on Ganglion on 16 November:
@@ -237,8 +237,32 @@ The scheduled Germline gate ran at the lowest priority from 11:03 to 11:13 HKT, 
 of this run, while no gate overlapped Carbon's. Every seat ran under the same load, and Argon cleared the latency
 floor by more than 20 seconds, so the overlap cannot change the verdict.
 
-The trial step under "Trial and Carbon plan" needs Terry's yes. He also decides whether Argon takes K3's place as
-seat four or becomes a seventh seat. The roster and seat defaults are unchanged until then.
+Terry chose to replace K3 rather than add a seventh seat. See the seat-four trial below.
+
+## Seat-four trial, 16 November 2026
+
+At 11:45 HKT Terry asked "replace K3 with Argon?", answering the choice between replacing K3 and adding a
+seventh seat. The cockpit agreed. K3 had answered nothing for six weeks, so replacing it gives six seats that
+answer, with four needed for a majority, while a seventh seat would have kept a dead seat and needed four of seven.
+The trial therefore runs in seat four instead of through `CONSILIUM_MODEL_M7`, which this note's trial plan had
+assumed.
+
+The canaries ran first with `CONSILIUM_MODEL_M4=google/gemini-4-argon quorate benchmark`. The roster was healthy,
+and all three canaries reached quorum with nine roles answering. Argon passed all three through Antigravity with
+no fallback, at a mean of 12.8 s. Grok 4.7 answered every canary but failed the exact-token one. GLM-5.3 fell back
+to OpenRouter once after an empty native response, and the critic, Gemini 3.5 Flash, ran entirely on Google AI
+Studio because Antigravity no longer accepts its label. Estimated API spend was under one US cent. The snapshot is
+`~/.local/state/quorate/benchmarks/2026-11-16.json`.
+
+Quorate's config now defaults seat four to `google/gemini-4-argon`. Setting `CONSILIUM_MODEL_M4=kimi-code/k3`
+restores K3 for one run, and reverting the commit restores it for good. Seat four also supplies quick runs and
+brainstorms, as it did for K3, so brainstorms now carry two Google generators, Argon and Gemini 3.5 Flash. Two
+seventh-seat assay tests now pin K3 in seat four, because the assay was declared against that roster.
+
+Promotion to production follows the [model role governance policy](../model-role-governance.md): natural use must
+show acceptable reachability and latency, which the run log records for every seat. The interactive K3-effect
+question fires only when K3 sits on the council, so it falls silent. A seat-four value question would need its own
+change to the run log and usage report, and is an open thread.
 
 ## Limitations
 

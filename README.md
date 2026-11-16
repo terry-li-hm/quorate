@@ -28,7 +28,7 @@ The six council debaters (`resolved_council()` in `config.py`):
 | GPT-6.1 Sol | OpenAI Codex CLI → OpenAI API → OpenRouter |
 | Claude Opus 5.5 | Claude CLI → Anthropic API → OpenRouter |
 | Grok 4.7 | xAI API → OpenRouter |
-| Kimi K3 | Kimi Code membership API → interactive Kimi Code CLI |
+| Gemini 4 Argon, trial since 16 November 2026 | Antigravity CLI → Google AI Studio → OpenRouter |
 | GLM-5.3 | ZhiPu API → OpenRouter |
 | DeepSeek V4 Pro | OpenRouter (DeepSeek) |
 

@@ -265,7 +265,7 @@ class TestCouncilResolution:
             "openai/gpt-6.1-sol",
             "anthropic/claude-opus-5-5",
             "x-ai/grok-4.7",
-            "kimi-code/k3",
+            "google/gemini-4-argon",
             "z-ai/glm-5.3",
             "deepseek/deepseek-v4-pro",
         ]
@@ -275,7 +275,7 @@ class TestCouncilResolution:
             "GPT-6.1-Sol",
             "Claude-Opus-5-5",
             "Grok-4.7",
-            "K3",
+            "Gemini-4-Argon",
             "GLM-5.3",
             "DeepSeek-V4-Pro",
         ]
@@ -286,20 +286,22 @@ class TestSeventhCouncilSeat:
         monkeypatch.delenv("CONSILIUM_MODEL_M7", raising=False)
         council = resolved_council()
         assert len(council) == 6
-        assert all(not entry.model.startswith("google/") for entry in council)
+        assert [entry.model for entry in council if entry.model.startswith("google/")] == [
+            "google/gemini-4-argon"
+        ]
 
         monkeypatch.setenv("CONSILIUM_MODEL_M7", "   ")
         assert len(resolved_council()) == 6
 
     def test_seventh_seat_override_appends_gemini_entry(self, monkeypatch):
-        monkeypatch.setenv("CONSILIUM_MODEL_M7", "google/gemini-4-argon")
+        monkeypatch.setenv("CONSILIUM_MODEL_M7", "google/gemini-4-carbon")
         council = resolved_council()
         assert len(council) == 7
-        assert council[-1] == ModelEntry("Gemini-4-Argon", "google/gemini-4-argon")
+        assert council[-1] == ModelEntry("Gemini-4-Carbon", "google/gemini-4-carbon")
 
     def test_seventh_seat_joins_quick_brainstorm_and_benchmark_rosters(self, monkeypatch):
-        monkeypatch.setenv("CONSILIUM_MODEL_M7", "google/gemini-4-argon")
+        monkeypatch.setenv("CONSILIUM_MODEL_M7", "google/gemini-4-carbon")
         assert len(quick_models()) == 8
         assert len(brainstorm_models()) == 9
         benchmark = [entry.model for entry in benchmark_models()]
-        assert benchmark.count("google/gemini-4-argon") == 1
+        assert benchmark.count("google/gemini-4-carbon") == 1
