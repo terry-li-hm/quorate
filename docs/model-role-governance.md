@@ -12,7 +12,7 @@ To revive Quorate:
 
 1. Re-enable and reload the monthly job with `launchctl enable gui/$(id -u)/com.vivesca.quorate-monthly-benchmark` and then `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.vivesca.quorate-monthly-benchmark.plist`.
 2. Restore the skill routes by reverting or reapplying the Germline commit "receptors: stop offering Quorate; mark it dormant and explicit-only", which returns the `quorate` skill's routing description and triggers and the Quorate routes in the twelve skills that offered it.
-3. Sign Antigravity back in on any host where it has lapsed, because seat four and the critic depend on it, then run `quorate benchmark` and treat any failed canary as a seat review under the rules below.
+3. Sign Antigravity back in on any host where it has lapsed, because seat four and the critic depend on it, then run `quorate benchmark` and treat any failed canary as a seat review under the rules below. The critic's route is still undecided: Antigravity no longer accepts the `Gemini 3.5 Flash (Medium)` label, so the critic falls back to Google AI Studio, and the candidates are listed in the Gemini seat note. That decision waits for revival.
 
 ## Admission lifecycle
 
