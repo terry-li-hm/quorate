@@ -49,6 +49,10 @@ class TestPriceLookup:
     def test_zhipu_glm51_free(self):
         assert runlog.price_for("glm-5.1") == (0.0, 0.0)
 
+    def test_current_grok_and_glm_seats_have_explicit_prices(self):
+        assert runlog.price_for("x-ai/grok-4.7") == (2.00, 6.00)
+        assert runlog.price_for("z-ai/glm-5.3") == (0.0699, 1.40)
+
     def test_minimax_m3(self):
         assert runlog.price_for("minimax/minimax-m3") == (0.30, 1.20)
 
@@ -59,6 +63,8 @@ class TestPriceLookup:
         # Opus 5 has no prefix overlap with the 4.x rows, so an explicit row keeps
         # OpenRouter-fallback cost estimates off $0.
         assert runlog.price_for("anthropic/claude-opus-5") == (5.00, 25.00)
+        # Opus 5.5 shares the claude-opus-5 prefix, so its own row must win.
+        assert runlog.price_for("anthropic/claude-opus-5-5") == (4.00, 20.00)
         assert runlog.price_for("claude-fable-5-1") == (10.00, 50.00)
         assert runlog.price_for("claude-fable-5-2") == (8.00, 40.00)
         assert runlog.price_for("anthropic/claude-fable-5-2") == (8.00, 40.00)

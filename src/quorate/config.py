@@ -78,9 +78,9 @@ ANTHROPIC_VERSION = "2023-06-01"
 JUDGE_MODEL = "anthropic/claude-fable-5-2"
 JUDGE_FALLBACK_MODEL = "openai/gpt-6.1-sol"
 CRITIQUE_MODEL = "google/gemini-3.5-flash"
-CRITIQUE_FALLBACK_MODEL = "anthropic/claude-opus-5"
-CLASSIFIER_MODEL = "anthropic/claude-opus-5"
-XAI_DEFAULT_MODEL = "grok-4.5"
+CRITIQUE_FALLBACK_MODEL = "anthropic/claude-opus-5-5"
+CLASSIFIER_MODEL = "anthropic/claude-opus-5-5"
+XAI_DEFAULT_MODEL = "grok-4.7"
 BRAINSTORM_EXTRA_MODELS = (
     "google/gemini-3.5-flash",
     "minimax/minimax-m3",
@@ -97,7 +97,7 @@ def _normalize_model(value: str) -> str:
         case "sonnet":
             return "anthropic/claude-sonnet-5"
         case "opus":
-            return "anthropic/claude-opus-5"
+            return "anthropic/claude-opus-5-5"
         case "fable":
             return "anthropic/claude-fable-5-2"
         case "gemini":
@@ -109,10 +109,10 @@ def _normalize_model(value: str) -> str:
 def resolved_council() -> list[ModelEntry]:
     """Resolve council models at runtime with env overrides."""
     model_1 = _env("CONSILIUM_MODEL_M1") or "openai/gpt-6.1-sol"
-    model_2 = _env("CONSILIUM_MODEL_M2") or "anthropic/claude-opus-5"
-    model_3 = _env("CONSILIUM_MODEL_M3") or "x-ai/grok-4.5"
+    model_2 = _env("CONSILIUM_MODEL_M2") or "anthropic/claude-opus-5-5"
+    model_3 = _env("CONSILIUM_MODEL_M3") or "x-ai/grok-4.7"
     model_4 = _env("CONSILIUM_MODEL_M4") or "kimi-code/k3"
-    model_5 = _env("CONSILIUM_MODEL_M5") or "z-ai/glm-5.2"
+    model_5 = _env("CONSILIUM_MODEL_M5") or "z-ai/glm-5.3"
     model_6 = _env("CONSILIUM_MODEL_M6") or "deepseek/deepseek-v4-pro"
     model_7 = _env("CONSILIUM_MODEL_M7")
     xai_model = _env("CONSILIUM_XAI_MODEL") or XAI_DEFAULT_MODEL
@@ -226,6 +226,7 @@ THINKING_MODELS = {
     "claude-opus-4-8",
     "claude-opus-4-7",
     "claude-opus-4-6",
+    "claude-opus-5-5",
     "claude-opus-5",
     "claude-sonnet-5",
     "gpt-6.1-sol",
@@ -240,11 +241,13 @@ THINKING_MODELS = {
     "gemini-3.1-pro-preview",
     "gemini-3.5-flash",
     "grok-4",
+    "grok-4.7",
     "grok-4.5",
     "grok-4.3",
     "deepseek-r1",
     "deepseek-v4-pro",
     "glm-5",
+    "glm-5.3",
     "glm-5.2",
     "glm-5.1",
     "kimi-k2.6",

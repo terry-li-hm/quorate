@@ -38,10 +38,14 @@ PRICES: dict[str, tuple[float, float]] = {
     "claude-fable-5": (10.00, 50.00),
     "claude-fable-5-1": (10.00, 50.00),
     "claude-fable-5-2": (8.00, 40.00),
+    # OpenRouter list price read on 16 November 2026.
+    "claude-opus-5-5": (4.00, 20.00),
     "claude-opus-5": (5.00, 25.00),
     "claude-sonnet-5": (2.00, 10.00),
     "claude-opus-4-8": (5.00, 25.00),
     "claude-opus-4-7": (15.00, 75.00),
+    # xAI API list price read on 16 November 2026.
+    "grok-4.7": (2.00, 6.00),
     "grok-4.5": (2.00, 6.00),
     "grok-4.3": (3.00, 15.00),
     "grok-4.20-0309-reasoning": (3.00, 15.00),
@@ -49,6 +53,8 @@ PRICES: dict[str, tuple[float, float]] = {
     # Fireworks K3 US Priority: input/output USD per 1M tokens. Cached-input
     # pricing is not retained in ModelCallResult, so input remains conservative.
     "kimi-k3-us": (4.125, 20.625),
+    # OpenRouter list price read on 16 November 2026.
+    "glm-5.3": (0.0699, 1.40),
     "glm-5.2": (0.9576, 3.0096),
     "glm-5.1": (0.0, 0.0),
     "mimo-v2.5-pro": (0.435, 0.87),

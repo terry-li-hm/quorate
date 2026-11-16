@@ -31,7 +31,7 @@ scripts/install-local.sh
 - **Gemini via `agy --print`** (Antigravity subscription, $0) — first route for Google models
 - **K3 via Kimi Code membership API** — documented third-party integration with a real `User-Agent`; the official CLI is interactive-only
 - **Fireworks US K3 candidate** — dormant exact-router client for `accounts/fireworks/routers/kimi-k3-us`; direct and fail-closed, never a fallback
-- **ZhiPu native** — direct API at `open.bigmodel.cn/api/coding/paas/v4` (coding plan, zero marginal-cost GLM-5.2)
+- **ZhiPu native** — direct API at `open.bigmodel.cn/api/coding/paas/v4` (coding plan, zero marginal-cost GLM-5.3)
 - **API keys via `op run`:** effector wrapper injects keys from `quorate.env.op` at startup — no 1Password code in Python
 - **Executable split:** `~/.local/bin/quorate` links to the effector; the effector calls `quorate-core` after injecting keys, preventing both credential bypass and wrapper recursion
 - **Brainstorm:** council families plus Gemini and MiniMax generate independently; Fable curates
@@ -44,14 +44,14 @@ scripts/install-local.sh
 | google/gemini-3.5-flash | Antigravity / Google AI Studio | Gemini-3.5-Flash |
 | openai/gpt-6.1-sol | Codex exec | GPT-6.1-Sol |
 | anthropic/claude-fable-5-2 | claude --print | Claude-Fable-5-2 |
-| anthropic/claude-opus-5 | claude --print | Claude-Opus-5 |
-| x-ai/grok-4.5 | xAI native | Grok-4.5 |
+| anthropic/claude-opus-5-5 | claude --print | Claude-Opus-5-5 |
+| x-ai/grok-4.7 | xAI native | Grok-4.7 |
 | kimi-code/k3 | Kimi Code subscription | Kimi-K3 |
-| z-ai/glm-5.2 | ZhiPu native | GLM-5.2 |
+| z-ai/glm-5.3 | ZhiPu native | GLM-5.3 |
 | deepseek/deepseek-v4-pro | OpenRouter | DeepSeek-V4-Pro |
 | minimax/minimax-m3 | OpenRouter | MiniMax-M3 |
 
-Council seat: Claude Opus 5. Judge: Claude Fable 5.2, with GPT-6.1 Sol through Codex as the fallback. Critic: Gemini 3.5 Flash, with Claude Opus 5 as the fallback.
+Council seat: Claude Opus 5.5. Judge: Claude Fable 5.2, with GPT-6.1 Sol through Codex as the fallback. Critic: Gemini 3.5 Flash, with Claude Opus 5.5 as the fallback.
 
 ## Runtime expectations
 

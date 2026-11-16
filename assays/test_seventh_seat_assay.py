@@ -48,7 +48,7 @@ def test_parse_scores_requires_one_complete_marker():
 
 
 def test_panel_order_is_seeded_and_round_trips():
-    names = ["GPT-6.1-Sol", "Claude-Opus-5", "Grok-4.5", "Kimi-K3", "GLM-5.2", "Gemini-4-Argon"]
+    names = ["GPT-6.1-Sol", "Claude-Opus-5-5", "Grok-4.7", "Kimi-K3", "GLM-5.3", "Gemini-4-Argon"]
     case = CASES[0]
     first = panel_order(case, FABLE.name, list(names))
     assert first == panel_order(case, FABLE.name, list(names))
@@ -93,10 +93,10 @@ def _judge_summary(name, *, contracts=20):
 
 INCUMBENT_NAMES = [
     "GPT-6.1-Sol",
-    "Claude-Opus-5",
-    "Grok-4.5",
+    "Claude-Opus-5-5",
+    "Grok-4.7",
     "Kimi-K3",
-    "GLM-5.2",
+    "GLM-5.3",
     "DeepSeek-V4-Pro",
 ]
 
@@ -107,10 +107,10 @@ def _panel_inputs(**candidate_overrides):
     scores = {
         "Gemini-4-Argon": 1.5,
         "GPT-6.1-Sol": 1.0,
-        "Claude-Opus-5": 1.2,
-        "Grok-4.5": 1.4,
+        "Claude-Opus-5-5": 1.2,
+        "Grok-4.7": 1.4,
         "Kimi-K3": 1.6,
-        "GLM-5.2": 1.8,
+        "GLM-5.3": 1.8,
         "DeepSeek-V4-Pro": 2.0,
     }
     judges = [_judge_summary(FABLE.name), _judge_summary(GPT.name)]
@@ -145,7 +145,7 @@ def test_admission_requires_median_and_every_floor():
 def test_admission_marks_invalid_runs():
     candidate, seats, scores, judges = _panel_inputs()
     weak = [
-        dict(seat, reachable=17) if seat["model"] in {"Kimi-K3", "GLM-5.2"} else seat
+        dict(seat, reachable=17) if seat["model"] in {"Kimi-K3", "GLM-5.3"} else seat
         for seat in seats
     ]
     weak_decision = admission_decision([*weak, candidate], judges, scores, "Gemini-4-Argon")

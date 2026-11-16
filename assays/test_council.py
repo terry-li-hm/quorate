@@ -85,7 +85,7 @@ def test_council_uses_subscription_critic_fallback(monkeypatch):
             return "Primary synthesis"
         if model == "google/gemini-3.5-flash":
             return "[Error: preferred critic unavailable]"
-        assert model == "anthropic/claude-opus-5"
+        assert model == "anthropic/claude-opus-5-5"
         return "Fallback critique"
 
     monkeypatch.setattr(council, "run_parallel", fake_run_parallel)
@@ -103,7 +103,7 @@ def test_council_uses_subscription_critic_fallback(monkeypatch):
     )
 
     assert isinstance(result, dict)
-    assert result["phases"]["critique"]["model"] == "anthropic/claude-opus-5"
+    assert result["phases"]["critique"]["model"] == "anthropic/claude-opus-5-5"
     assert result["phases"]["critique"]["preferred_model"] == "google/gemini-3.5-flash"
 
 

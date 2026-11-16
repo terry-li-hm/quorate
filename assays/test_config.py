@@ -69,7 +69,7 @@ class TestModelAliases:
         assert _normalize_model("sonnet") == "anthropic/claude-sonnet-5"
 
     def test_opus_alias(self):
-        assert _normalize_model("opus") == "anthropic/claude-opus-5"
+        assert _normalize_model("opus") == "anthropic/claude-opus-5-5"
 
     def test_fable_alias(self):
         assert _normalize_model("fable") == "anthropic/claude-fable-5-2"
@@ -252,10 +252,10 @@ class TestCouncilResolution:
         assert resolved_critique() == "google/gemini-3.5-flash"
 
     def test_critique_subscription_fallback(self):
-        assert resolved_critique_fallback() == "anthropic/claude-opus-5"
+        assert resolved_critique_fallback() == "anthropic/claude-opus-5-5"
 
     def test_classifier_default(self):
-        assert CLASSIFIER_MODEL == "anthropic/claude-opus-5"
+        assert CLASSIFIER_MODEL == "anthropic/claude-opus-5-5"
 
     def test_judge_subscription_fallback(self):
         assert resolved_judge_fallback() == "openai/gpt-6.1-sol"
@@ -263,11 +263,21 @@ class TestCouncilResolution:
     def test_frontier_defaults_preserve_generalist_diversity(self):
         assert [entry.model for entry in resolved_council()] == [
             "openai/gpt-6.1-sol",
-            "anthropic/claude-opus-5",
-            "x-ai/grok-4.5",
+            "anthropic/claude-opus-5-5",
+            "x-ai/grok-4.7",
             "kimi-code/k3",
-            "z-ai/glm-5.2",
+            "z-ai/glm-5.3",
             "deepseek/deepseek-v4-pro",
+        ]
+
+    def test_frontier_default_labels_name_the_served_versions(self):
+        assert [entry.name for entry in resolved_council()] == [
+            "GPT-6.1-Sol",
+            "Claude-Opus-5-5",
+            "Grok-4.7",
+            "K3",
+            "GLM-5.3",
+            "DeepSeek-V4-Pro",
         ]
 
 
