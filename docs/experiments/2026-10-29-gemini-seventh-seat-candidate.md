@@ -4,8 +4,10 @@ Date: 2026-10-29
 
 ## Status
 
-Running on Carbon since 16 November 2026. Terry asked "run the gemini seat test?" that morning, after the
-K3 seat was found dead. The harness and the admission rule below are unchanged.
+Carbon was assayed on 16 November 2026 and failed only the latency floor, so the roster stays unchanged. See
+[Carbon result](#carbon-result-16-november-2026) below. Argon, the fallback candidate, waits on Terry's yes. Terry
+asked "run the gemini seat test?" that morning, after the K3 seat was found dead. The harness and the admission
+rule below are unchanged.
 
 What changed since 29 October, all checked on Ganglion on 16 November:
 
@@ -21,12 +23,14 @@ What changed since 29 October, all checked on Ganglion on 16 November:
   20 August, so it scores nothing and the run stays valid only if all five other seats answer at least
   18 cases. The incumbent median is then taken over five seats.
 - **Critic route.** Antigravity no longer accepts the label `Gemini 3.5 Flash (Medium)`, so the critic
-  falls back to Google AI Studio. Separate from this assay and not yet decided.
+  falls back to Google AI Studio. Separate from this assay and not yet decided. On 16 November `agy models`
+  listed Gemini 3.8 Flash and Gemini 4 Hydrogen at several levels and no 3.5 Flash. Press reports describe
+  Hydrogen as an unannounced Flash-tier Gemini 4, so both are critic candidates, and a switch is a role change
+  under the [model role governance policy](../model-role-governance.md).
 
-The run started at 10:31 HKT as a detached process with `--candidate google/gemini-4-carbon`. Its report
-goes to `~/.local/state/quorate/council-seat-assays/2026-11-16-gemini-4-carbon-seat.json` and its log
-beside it with a `.log` suffix. A pass admits Carbon to a trial only. Whether it fills K3's place or
-becomes a seventh seat is Terry's decision after the result.
+The run started at 10:31 HKT as a detached process with `--candidate google/gemini-4-carbon` and finished at
+10:51 HKT. Its report is `~/.local/state/quorate/council-seat-assays/2026-11-16-gemini-4-carbon-seat.json`,
+with its log beside it under a `.log` suffix.
 
 ## Question
 
@@ -153,6 +157,40 @@ production under the [model role governance policy](../model-role-governance.md)
 
 When Carbon answers on a route Quorate can use, set the seventh seat to Carbon's published ID, add an exact
 Antigravity label only if `agy models` lists one, and rerun the canaries and this assay unchanged.
+
+## Carbon result, 16 November 2026
+
+The run returned `retain-six-seats`. Carbon cleared three of the four non-compensable floors and failed latency.
+Under the locked rule a failed floor retains the roster whatever the score, so Carbon is not admitted to a trial.
+
+The judges were Claude Fable 5.2 and GPT-6.1 Sol, and all three preflight calls answered without diagnostics.
+The run is valid. Five incumbents answered at least 19 cases each, and K3 answered none, refused with HTTP 403
+every time. Eighteen cases had the candidate and at least five incumbents and were judged. In the other two,
+Carbon or GPT-6.1 Sol failed once. Each judge completed all 18 judgments, exactly the floor of 18.
+
+| Seat | Reachable | 60–220 words | Truncated | Median latency (s) | Mean score |
+|---|---|---|---|---|---|
+| Gemini 4 Carbon, candidate | 19 | 19 | 0 | 75.4 | 1.194 |
+| Claude Opus 5.5 | 20 | 20 | 0 | 6.7 | 1.306 |
+| GPT-6.1 Sol | 19 | 19 | 0 | 43.4 | 1.222 |
+| GLM-5.3 | 20 | 20 | 0 | 10.0 | 0.639 |
+| Grok 4.7 | 20 | 20 | 0 | 17.3 | 0.444 |
+| DeepSeek V4 Pro | 20 | 20 | 0 | 10.3 | 0.306 |
+| K3 | 0 | 0 | 0 | none | none |
+
+Carbon's mean of 1.194 is nearly twice the five-seat incumbent median of 0.639 and ranks third, behind Opus and
+GPT. It would have passed the primary metric. Latency decided the verdict. Carbon's median was 75.4 s against the
+slowest incumbent median, GPT-6.1 Sol's 43.4 s. Its fastest answer took 54.7 s, so none of its 19 answers came in
+under that median. Its one failure hit Antigravity's 120-second subscription limit, then fell through to AI
+Studio's free-tier 429 and OpenRouter's 403. GPT-6.1 Sol's one failure followed the same path through Codex.
+
+While the run was going, the cockpit ran a 43-second single-process test suite and a few remote reads on the same
+host. That cannot explain a gap that every Carbon answer exceeded, so the result stands.
+
+Argon is the fallback candidate and needs Terry's yes before it runs. Its one synthetic probe answered in 27.1 s
+against Carbon's 37.7 s. Scaling Carbon's median by that ratio gives about 54 s, still above 43.4 s, so Argon may
+fail the same floor. One probe is weak evidence, and only the run settles it. The roster and seat defaults are
+unchanged.
 
 ## Limitations
 
