@@ -259,6 +259,10 @@ restores K3 for one run, and reverting the commit restores it for good. Seat fou
 brainstorms, as it did for K3, so brainstorms now carry two Google generators, Argon and Gemini 3.5 Flash. Two
 seventh-seat assay tests now pin K3 in seat four, because the assay was declared against that roster.
 
+Ganglion and Astrocyte both run this version since 16 November. Astrocyte's Antigravity CLI is signed out, so seat
+four falls through to AI Studio's free-tier 429 and OpenRouter's 403 there, and councils on Astrocyte run on five
+seats, as they did with K3, until Terry signs in by running `agy` interactively on that Mac.
+
 Promotion to production follows the [model role governance policy](../model-role-governance.md): natural use must
 show acceptable reachability and latency, which the run log records for every seat. The interactive K3-effect
 question fires only when K3 sits on the council, so it falls silent. A seat-four value question would need its own
