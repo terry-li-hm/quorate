@@ -5,7 +5,8 @@ Date: 2026-10-29
 ## Status
 
 Carbon was assayed on 16 November 2026 and failed only the latency floor, so the roster stays unchanged. See
-[Carbon result](#carbon-result-16-november-2026) below. Argon, the fallback candidate, waits on Terry's yes. Terry
+[Carbon result](#carbon-result-16-november-2026) below. Terry approved running Argon, the fallback candidate,
+at about 11:00 HKT, and its run started at 11:03 HKT under the same harness and rule. Terry
 asked "run the gemini seat test?" that morning, after the K3 seat was found dead. The harness and the admission
 rule below are unchanged.
 
@@ -187,10 +188,23 @@ Studio's free-tier 429 and OpenRouter's 403. GPT-6.1 Sol's one failure followed 
 While the run was going, the cockpit ran a 43-second single-process test suite and a few remote reads on the same
 host. That cannot explain a gap that every Carbon answer exceeded, so the result stands.
 
-Argon is the fallback candidate and needs Terry's yes before it runs. Its one synthetic probe answered in 27.1 s
+Argon is the fallback candidate. Its one synthetic probe answered in 27.1 s
 against Carbon's 37.7 s. Scaling Carbon's median by that ratio gives about 54 s, still above 43.4 s, so Argon may
 fail the same floor. One probe is weak evidence, and only the run settles it. The roster and seat defaults are
 unchanged.
+
+Two consequences were corrected for Terry after the result. A slow seat costs more than its blind-phase gap,
+because debate turns run one seat at a time, so a 75-second seat adds roughly its whole answer time to each round.
+Carbon at its Low level is not a simple rerun: the assay queries seats at default effort, and a council's effort
+applies to every seat, so it needs a per-seat effort setting and a newly predeclared assay.
+
+## Argon run, 16 November 2026
+
+Running. The process `python -I -m quorate.seventh_seat_assay --candidate google/gemini-4-argon` started at
+11:03 HKT with the resolved credentials, the same way as Carbon's run, and passed its preflight within half a
+minute. Its report goes to `~/.local/state/quorate/council-seat-assays/2026-11-16-gemini-4-argon-seat.json`,
+with its log beside it under a `.log` suffix. The host's load average was about 6 on four cores at launch,
+against about 3.5 during the Carbon run, from other sessions' work.
 
 ## Limitations
 
