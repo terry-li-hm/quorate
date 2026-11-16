@@ -702,6 +702,12 @@ def _antigravity_model(model: str, effort: ReasoningEffort | None) -> str | None
     if bare in ("gemini-3.1-pro", "gemini-3.1-pro-preview"):
         level = "Low" if effort is ReasoningEffort.LOW else "High"
         return f"Gemini 3.1 Pro ({level})"
+    if bare in ("gemini-4-carbon", "gemini-4-argon"):
+        # `agy models` on Ganglion listed both families at Low, Medium and High
+        # on 16 November 2026.
+        level = (effort or ReasoningEffort.MEDIUM).value.title()
+        family = bare.removeprefix("gemini-4-").title()
+        return f"Gemini 4 {family} ({level})"
     return None
 
 

@@ -96,11 +96,21 @@ class TestAntigravityModel:
             == "Gemini 3.1 Pro (Low)"
         )
 
+    def test_gemini_4_families_map_to_listed_labels(self):
+        assert _antigravity_model("google/gemini-4-carbon", None) == "Gemini 4 Carbon (Medium)"
+        assert (
+            _antigravity_model("google/gemini-4-carbon", ReasoningEffort.HIGH)
+            == "Gemini 4 Carbon (High)"
+        )
+        assert (
+            _antigravity_model("google/gemini-4-argon", ReasoningEffort.LOW)
+            == "Gemini 4 Argon (Low)"
+        )
+
 
 def test_antigravity_model_returns_none_for_unmapped_google_ids():
     unmapped = (
-        "google/gemini-4-argon",
-        "google/gemini-4-carbon",
+        "google/gemini-4-hydrogen",
         "google/gemini-3.5-flash-lite",
         "google/gemini-3.8-flash",
     )
@@ -130,14 +140,14 @@ def test_antigravity_prompt_refuses_unmapped_model_without_subprocess(monkeypatc
 
     async def run():
         return await _antigravity_prompt(
-            "google/gemini-4-argon",
+            "google/gemini-4-hydrogen",
             [Message.user("question")],
             10,
             None,
         )
 
     result, tokens = asyncio.run(run())
-    assert result == "[Error: Antigravity has no verified label for gemini-4-argon]"
+    assert result == "[Error: Antigravity has no verified label for gemini-4-hydrogen]"
     assert tokens is None
     assert _diagnostic_code(result) == "unmapped_model"
 
@@ -261,7 +271,7 @@ def test_google_flags_max_tokens_truncation():
             return await _google(
                 client,
                 "google-key",
-                "google/gemini-4-argon",
+                "google/gemini-4-hydrogen",
                 [Message.user("question")],
                 128,
                 10,
@@ -279,7 +289,7 @@ def test_google_flags_max_tokens_truncation():
     assert tokens == {"truncated": True}
 
     text, tokens = asyncio.run(run([{"text": "private reasoning", "thought": True}], None))
-    assert text == "[Error: google gemini-4-argon: max_tokens before visible text]"
+    assert text == "[Error: google gemini-4-hydrogen: max_tokens before visible text]"
     assert tokens is None
     assert _diagnostic_code(text) == "max_tokens"
 
@@ -306,15 +316,15 @@ def test_query_model_routes_unmapped_google_seat_to_ai_studio(monkeypatch):
             return await api.query_model(
                 client,
                 {"google": "google-key"},
-                ModelEntry("Gemini-4-Argon", "google/gemini-4-argon"),
+                ModelEntry("Gemini-4-Hydrogen", "google/gemini-4-hydrogen"),
                 [Message.user("question")],
             )
 
     result = asyncio.run(run())
     assert len(urls) == 1
-    assert "gemini-4-argon:generateContent" in urls[0]
+    assert "gemini-4-hydrogen:generateContent" in urls[0]
     assert result.provider == "google-ai-studio"
-    assert result.model_id == "gemini-4-argon"
+    assert result.model_id == "gemini-4-hydrogen"
     assert result.response == "answer"
     assert result.diagnostics == ("antigravity-cli:unmapped_model",)
 
@@ -339,7 +349,7 @@ def test_query_model_records_google_truncation_diagnostic():
             return await api.query_model(
                 client,
                 {"google": "google-key"},
-                ModelEntry("Gemini-4-Argon", "google/gemini-4-argon"),
+                ModelEntry("Gemini-4-Hydrogen", "google/gemini-4-hydrogen"),
                 [Message.user("question")],
             )
 

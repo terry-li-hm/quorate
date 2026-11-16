@@ -240,6 +240,8 @@ THINKING_MODELS = {
     "gpt-5.4",
     "gemini-3.1-pro-preview",
     "gemini-3.5-flash",
+    "gemini-4-carbon",
+    "gemini-4-argon",
     "grok-4",
     "grok-4.7",
     "grok-4.5",
