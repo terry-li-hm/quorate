@@ -18,7 +18,7 @@ from quorate.config import Message, ModelCallResult, ModelEntry, ReasoningEffort
 
 SUITE_VERSION = "2026-07-17"
 FABLE = ModelEntry("Claude-Fable-5-2", "anthropic/claude-fable-5-2")
-GPT = ModelEntry("GPT-5.6-Sol", "openai/gpt-5.6-sol")
+GPT = ModelEntry("GPT-6.1-Sol", "openai/gpt-6.1-sol")
 MODELS = (FABLE, GPT)
 FINAL_MARKER = re.compile(r"FINAL_DECISION\s*:\s*([AB])\b", re.IGNORECASE)
 SYSTEM_PROMPT = """You are the final judge of a synthetic decision case.

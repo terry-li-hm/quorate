@@ -118,7 +118,7 @@ def test_local_runner_calls_only_fixed_subscription_clients(tmp_path: Path, monk
     )
 
     assert calls == [
-        ("codex", "openai/gpt-5.6-sol"),
+        ("codex", "openai/gpt-6.1-sol"),
         ("gemini", "google/gemini-3.5-flash"),
     ]
     assert [result.provider for result in results] == ["codex-exec", "antigravity-cli"]

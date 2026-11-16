@@ -25,14 +25,14 @@ The six council debaters (`resolved_council()` in `config.py`):
 
 | Model | Provider (native → fallback) |
 |-------|------------------------------|
-| GPT-5.6 Sol | OpenAI Codex CLI → OpenAI API → OpenRouter |
+| GPT-6.1 Sol | OpenAI Codex CLI → OpenAI API → OpenRouter |
 | Claude Opus 5 | Claude CLI → Anthropic API → OpenRouter |
 | Grok 4.5 | xAI API → OpenRouter |
 | Kimi K3 | Kimi Code membership API → interactive Kimi Code CLI |
 | GLM-5.2 | ZhiPu API → OpenRouter |
 | DeepSeek V4 Pro | OpenRouter (DeepSeek) |
 
-Judge: Claude Fable 5.2 (Claude CLI → Anthropic API → OpenRouter), with GPT-5.6 Sol through the Codex subscription as the cross-vendor fallback. Critic: Gemini 3.5 Flash (Antigravity CLI → Google AI Studio → OpenRouter), with Claude Opus 5 as its fallback.
+Judge: Claude Fable 5.2 (Claude CLI → Anthropic API → OpenRouter), with GPT-6.1 Sol through the Codex subscription as the cross-vendor fallback. Critic: Gemini 3.5 Flash (Antigravity CLI → Google AI Studio → OpenRouter), with Claude Opus 5 as its fallback.
 
 Brainstorm mode uses the six council families plus Gemini 3.5 Flash and MiniMax M3. Claude Fable curates the resulting ideas but does not generate them.
 
@@ -186,7 +186,7 @@ export FIREWORKS_API_KEY="..."        # Optional Fireworks US K3 candidate
 export QUORATE_FIREWORKS_KEY="..."    # Dedicated Fireworks key (takes priority)
 ```
 
-GPT-5.6 Sol uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, and Gemini uses Antigravity (`agy --print`). K3 prefers Kimi's documented membership API with Quorate's real `User-Agent`; the official Kimi Code CLI is available only for a human-run interactive terminal. Headless and scheduled runs fail closed when `KIMI_CODE_API_KEY` is absent instead of simulating interactive use. The dormant Fireworks candidate likewise requires a key and accepts only `accounts/fireworks/routers/kimi-k3-us` through Chat Completions. These routes use their respective subscriptions at zero marginal cost except Fireworks, which is metered. Each subscription CLI receives an allowlisted environment without unrelated provider credentials and runs from a temporary workspace; Claude has no tools, Codex is read-only, and Antigravity uses sandboxed plan mode. GPT, Claude, and Gemini can fall back to a direct API and then OpenRouter. Telemetry records the model and route actually used, and subscription-backed calls are not priced as API usage.
+GPT-6.1 Sol uses [Codex CLI](https://github.com/openai/codex) (`codex exec`), Claude uses `claude --print`, and Gemini uses Antigravity (`agy --print`). K3 prefers Kimi's documented membership API with Quorate's real `User-Agent`; the official Kimi Code CLI is available only for a human-run interactive terminal. Headless and scheduled runs fail closed when `KIMI_CODE_API_KEY` is absent instead of simulating interactive use. The dormant Fireworks candidate likewise requires a key and accepts only `accounts/fireworks/routers/kimi-k3-us` through Chat Completions. These routes use their respective subscriptions at zero marginal cost except Fireworks, which is metered. Each subscription CLI receives an allowlisted environment without unrelated provider credentials and runs from a temporary workspace; Claude has no tools, Codex is read-only, and Antigravity uses sandboxed plan mode. GPT, Claude, and Gemini can fall back to a direct API and then OpenRouter. Telemetry records the model and route actually used, and subscription-backed calls are not priced as API usage.
 
 The [subscription CLI isolation audit](docs/experiments/2026-07-17-subscription-cli-isolation.md)
 records the ambient-authority finding, containment changes, and live route verification.

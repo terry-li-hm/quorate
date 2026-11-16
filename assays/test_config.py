@@ -138,7 +138,7 @@ class TestAnthropicAdaptiveThinking:
             assert anthropic_uses_adaptive_thinking(f"anthropic/{name}") is False
 
     def test_non_anthropic_models(self):
-        assert anthropic_uses_adaptive_thinking("openai/gpt-5.6-sol") is False
+        assert anthropic_uses_adaptive_thinking("openai/gpt-6.1-sol") is False
         assert anthropic_uses_adaptive_thinking("google/gemini-3.5-flash") is False
 
 
@@ -158,7 +158,7 @@ class TestOpenRouterModelId:
         assert openrouter_model_id("claude-fable-5-2") == "claude-fable-5.2"
 
     def test_non_anthropic_ids_are_verbatim(self):
-        assert openrouter_model_id("openai/gpt-5.6-sol") == "openai/gpt-5.6-sol"
+        assert openrouter_model_id("openai/gpt-6.1-sol") == "openai/gpt-6.1-sol"
         assert (
             openrouter_model_id("accounts/fireworks/routers/kimi-k3-us")
             == "accounts/fireworks/routers/kimi-k3-us"
@@ -258,11 +258,11 @@ class TestCouncilResolution:
         assert CLASSIFIER_MODEL == "anthropic/claude-opus-5"
 
     def test_judge_subscription_fallback(self):
-        assert resolved_judge_fallback() == "openai/gpt-5.6-sol"
+        assert resolved_judge_fallback() == "openai/gpt-6.1-sol"
 
     def test_frontier_defaults_preserve_generalist_diversity(self):
         assert [entry.model for entry in resolved_council()] == [
-            "openai/gpt-5.6-sol",
+            "openai/gpt-6.1-sol",
             "anthropic/claude-opus-5",
             "x-ai/grok-4.5",
             "kimi-code/k3",

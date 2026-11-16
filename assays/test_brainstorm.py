@@ -87,7 +87,7 @@ def test_brainstorm_falls_back_when_curator_misses_contract(monkeypatch):
     async def fake_query_judge(model, *_args, **_kwargs):
         if model == "anthropic/claude-fable-5-2":
             return "A caveat without the requested shortlist"
-        assert model == "openai/gpt-5.6-sol"
+        assert model == "openai/gpt-6.1-sol"
         return "## Shortlist\nSix ideas\n\n## Wildcard\nOne bet\n\n## Pattern map\nA pattern"
 
     monkeypatch.setattr(brainstorm, "query_model", fake_query_model)
@@ -104,7 +104,7 @@ def test_brainstorm_falls_back_when_curator_misses_contract(monkeypatch):
     )
 
     assert isinstance(result, dict)
-    assert result["phases"]["curation"]["model"] == "openai/gpt-5.6-sol"
+    assert result["phases"]["curation"]["model"] == "openai/gpt-6.1-sol"
     assert result["phases"]["curation"]["preferred_model"] == "anthropic/claude-fable-5-2"
 
 

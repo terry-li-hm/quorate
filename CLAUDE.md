@@ -42,7 +42,7 @@ scripts/install-local.sh
 | Model | Provider | Display Name |
 |-------|----------|-------------|
 | google/gemini-3.5-flash | Antigravity / Google AI Studio | Gemini-3.5-Flash |
-| openai/gpt-5.6-sol | Codex exec | GPT-5.6-Sol |
+| openai/gpt-6.1-sol | Codex exec | GPT-6.1-Sol |
 | anthropic/claude-fable-5-2 | claude --print | Claude-Fable-5-2 |
 | anthropic/claude-opus-5 | claude --print | Claude-Opus-5 |
 | x-ai/grok-4.5 | xAI native | Grok-4.5 |
@@ -51,7 +51,7 @@ scripts/install-local.sh
 | deepseek/deepseek-v4-pro | OpenRouter | DeepSeek-V4-Pro |
 | minimax/minimax-m3 | OpenRouter | MiniMax-M3 |
 
-Council seat: Claude Opus 5. Judge: Claude Fable 5.2, with GPT-5.6 Sol through Codex as the fallback. Critic: Gemini 3.5 Flash, with Claude Opus 5 as the fallback.
+Council seat: Claude Opus 5. Judge: Claude Fable 5.2, with GPT-6.1 Sol through Codex as the fallback. Critic: Gemini 3.5 Flash, with Claude Opus 5 as the fallback.
 
 ## Runtime expectations
 
@@ -72,7 +72,7 @@ Council seat: Claude Opus 5. Judge: Claude Fable 5.2, with GPT-5.6 Sol through C
 
 - OpenRouter returns 403 for OpenAI/Google/Anthropic models from HK IP — must use native APIs
 - `codex exec` needs `-c 'model_reasoning_effort="xhigh"'` and `--skip-git-repo-check`
-- `codex exec` strips an OpenRouter-style `-pro` suffix. Use the actual Codex model ID, currently `gpt-5.6-sol`; quick mode requests medium reasoning while council retains the CLI's highest default when no effort is supplied.
+- `codex exec` strips an OpenRouter-style `-pro` suffix. Use the actual Codex model ID, currently `gpt-6.1-sol`; quick mode requests medium reasoning while council retains the CLI's highest default when no effort is supplied.
 - The standalone Gemini CLI no longer supports the individual subscription client. Google models use Antigravity in sandboxed plan mode before falling back to Google AI Studio.
 - Antigravity maps only exact, verified model IDs. Any other Google model skips it with `antigravity-cli:unmapped_model` and goes to Google AI Studio under its own ID; add a label only after `agy models` lists it.
 - Gemini's thinking tokens count against `maxOutputTokens`, so the Google client adds the thinking budget to the caller's visible-answer cap. A `MAX_TOKENS` finish surfaces as `google-ai-studio:max_tokens`.

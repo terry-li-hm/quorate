@@ -76,7 +76,7 @@ ANTHROPIC_VERSION = "2023-06-01"
 
 # Default models
 JUDGE_MODEL = "anthropic/claude-fable-5-2"
-JUDGE_FALLBACK_MODEL = "openai/gpt-5.6-sol"
+JUDGE_FALLBACK_MODEL = "openai/gpt-6.1-sol"
 CRITIQUE_MODEL = "google/gemini-3.5-flash"
 CRITIQUE_FALLBACK_MODEL = "anthropic/claude-opus-5"
 CLASSIFIER_MODEL = "anthropic/claude-opus-5"
@@ -108,7 +108,7 @@ def _normalize_model(value: str) -> str:
 
 def resolved_council() -> list[ModelEntry]:
     """Resolve council models at runtime with env overrides."""
-    model_1 = _env("CONSILIUM_MODEL_M1") or "openai/gpt-5.6-sol"
+    model_1 = _env("CONSILIUM_MODEL_M1") or "openai/gpt-6.1-sol"
     model_2 = _env("CONSILIUM_MODEL_M2") or "anthropic/claude-opus-5"
     model_3 = _env("CONSILIUM_MODEL_M3") or "x-ai/grok-4.5"
     model_4 = _env("CONSILIUM_MODEL_M4") or "kimi-code/k3"
@@ -228,6 +228,9 @@ THINKING_MODELS = {
     "claude-opus-4-6",
     "claude-opus-5",
     "claude-sonnet-5",
+    "gpt-6.1-sol",
+    "gpt-6.1-terra",
+    "gpt-6-luna",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
     "gpt-5.6-luna",

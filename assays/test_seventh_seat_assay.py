@@ -48,7 +48,7 @@ def test_parse_scores_requires_one_complete_marker():
 
 
 def test_panel_order_is_seeded_and_round_trips():
-    names = ["GPT-5.6-Sol", "Claude-Opus-5", "Grok-4.5", "Kimi-K3", "GLM-5.2", "Gemini-4-Argon"]
+    names = ["GPT-6.1-Sol", "Claude-Opus-5", "Grok-4.5", "Kimi-K3", "GLM-5.2", "Gemini-4-Argon"]
     case = CASES[0]
     first = panel_order(case, FABLE.name, list(names))
     assert first == panel_order(case, FABLE.name, list(names))
@@ -92,7 +92,7 @@ def _judge_summary(name, *, contracts=20):
 
 
 INCUMBENT_NAMES = [
-    "GPT-5.6-Sol",
+    "GPT-6.1-Sol",
     "Claude-Opus-5",
     "Grok-4.5",
     "Kimi-K3",
@@ -106,7 +106,7 @@ def _panel_inputs(**candidate_overrides):
     seats = [_seat_summary(name) for name in INCUMBENT_NAMES]
     scores = {
         "Gemini-4-Argon": 1.5,
-        "GPT-5.6-Sol": 1.0,
+        "GPT-6.1-Sol": 1.0,
         "Claude-Opus-5": 1.2,
         "Grok-4.5": 1.4,
         "Kimi-K3": 1.6,
@@ -205,7 +205,7 @@ def test_run_assay_with_fake_runners_scores_and_retains_no_text():
     assert report["responses_retained"] is False
     assert report["judges"] == [
         {"name": "Claude-Fable-5-2", "model": "anthropic/claude-fable-5-2"},
-        {"name": "GPT-5.6-Sol", "model": "openai/gpt-5.6-sol"},
+        {"name": "GPT-6.1-Sol", "model": "openai/gpt-6.1-sol"},
     ]
     assert len(report["preflight"]) == 3
     assert all(row["reachable"] for row in report["preflight"])
@@ -268,7 +268,7 @@ def test_default_judges_follow_council_judge_and_fallback(monkeypatch):
     default = assay_judges()
     assert [(judge.name, judge.model) for judge in default] == [
         ("Claude-Fable-5-2", "anthropic/claude-fable-5-2"),
-        ("GPT-5.6-Sol", "openai/gpt-5.6-sol"),
+        ("GPT-6.1-Sol", "openai/gpt-6.1-sol"),
     ]
 
 

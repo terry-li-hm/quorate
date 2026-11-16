@@ -46,7 +46,7 @@ def test_council_uses_subscription_judge_fallback(monkeypatch):
     async def fake_query_judge(model, *_args, **_kwargs):
         if model == "google/gemini-3.5-flash":
             return "[Error: preferred judge unavailable]"
-        assert model == "openai/gpt-5.6-sol"
+        assert model == "openai/gpt-6.1-sol"
         return "Fallback synthesis"
 
     monkeypatch.setattr(council, "run_parallel", fake_run_parallel)
@@ -67,7 +67,7 @@ def test_council_uses_subscription_judge_fallback(monkeypatch):
 
     assert isinstance(result, dict)
     assert result["quorum_achieved"] is True
-    assert result["phases"]["judge"]["model"] == "openai/gpt-5.6-sol"
+    assert result["phases"]["judge"]["model"] == "openai/gpt-6.1-sol"
     assert result["phases"]["judge"]["preferred_model"] == "google/gemini-3.5-flash"
 
 

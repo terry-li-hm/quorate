@@ -12,7 +12,7 @@ from pathlib import Path
 from quorate.api import _antigravity_prompt, _codex_exec
 from quorate.config import Message, ModelCallResult, ModelEntry, ReasoningEffort
 
-CODEX_MODEL = "openai/gpt-5.6-sol"
+CODEX_MODEL = "openai/gpt-6.1-sol"
 GEMINI_MODEL = "google/gemini-3.5-flash"
 CODEX_ENTRY = ModelEntry("Codex Local", "local/codex")
 GEMINI_ENTRY = ModelEntry("Gemini Local", "local/gemini")
