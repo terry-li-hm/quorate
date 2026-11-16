@@ -4,8 +4,29 @@ Date: 2026-10-29
 
 ## Status
 
-Candidate. Every route to the candidate is closed and both judges are unreachable, so no assay has run.
-The harness and the admission rule below are locked before any run.
+Running on Carbon since 16 November 2026. Terry asked "run the gemini seat test?" that morning, after the
+K3 seat was found dead. The harness and the admission rule below are unchanged.
+
+What changed since 29 October, all checked on Ganglion on 16 November:
+
+- **Route.** `agy models` lists Gemini 4 Carbon and Argon at Low, Medium and High, and both answered a
+  synthetic prompt through `agy --print` in plan mode, Carbon in 37.7 s and Argon in 27.1 s. Commit
+  `47aaf36` maps both to those exact labels at Medium by default, as the Carbon plan below allows.
+- **Candidate.** Carbon, under the Carbon plan below, because it now answers on a route Quorate can use
+  and is Vivesca's default cross-family challenger. Argon stays the fallback candidate if Carbon fails
+  only the latency floor.
+- **Judges.** Claude Fable 5.2 and GPT-6.1 Sol both answered the 16 November speedtest.
+- **Incumbents.** Seats are GPT-6.1 Sol, Claude Opus 5.5, Grok 4.7, K3, GLM-5.3 and DeepSeek V4 Pro.
+  K3 has refused every call since at least 1 October, after the Kimi membership was cancelled on
+  20 August, so it scores nothing and the run stays valid only if all five other seats answer at least
+  18 cases. The incumbent median is then taken over five seats.
+- **Critic route.** Antigravity no longer accepts the label `Gemini 3.5 Flash (Medium)`, so the critic
+  falls back to Google AI Studio. Separate from this assay and not yet decided.
+
+The run started at 10:31 HKT as a detached process with `--candidate google/gemini-4-carbon`. Its report
+goes to `~/.local/state/quorate/council-seat-assays/2026-11-16-gemini-4-carbon-seat.json` and its log
+beside it with a `.log` suffix. A pass admits Carbon to a trial only. Whether it fills K3's place or
+becomes a seventh seat is Terry's decision after the result.
 
 ## Question
 
