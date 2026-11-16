@@ -4,11 +4,13 @@ Date: 2026-10-29
 
 ## Status
 
-Carbon was assayed on 16 November 2026 and failed only the latency floor, so the roster stays unchanged. See
-[Carbon result](#carbon-result-16-november-2026) below. Terry approved running Argon, the fallback candidate,
-at about 11:00 HKT, and its run started at 11:03 HKT under the same harness and rule. Terry
-asked "run the gemini seat test?" that morning, after the K3 seat was found dead. The harness and the admission
-rule below are unchanged.
+Argon was assayed on 16 November 2026 and returned `admit-trial`. It cleared all four floors with a median
+latency of 22.2 s and a mean score about twice the incumbent median. See
+[Argon result](#argon-result-16-november-2026) below. Carbon, assayed first that morning, failed only the latency
+floor; see [Carbon result](#carbon-result-16-november-2026). The trial now waits on Terry's yes and on his choice
+between Argon taking K3's place and Argon becoming a seventh seat. The roster and seat defaults are unchanged
+until he decides. Terry asked "run the gemini seat test?" that morning, after the K3 seat was found dead, and
+approved the Argon fallback run at about 11:00 HKT. The harness and the admission rule below are unchanged.
 
 What changed since 29 October, all checked on Ganglion on 16 November:
 
@@ -198,18 +200,50 @@ because debate turns run one seat at a time, so a 75-second seat adds roughly it
 Carbon at its Low level is not a simple rerun: the assay queries seats at default effort, and a council's effort
 applies to every seat, so it needs a per-seat effort setting and a newly predeclared assay.
 
-## Argon run, 16 November 2026
+## Argon result, 16 November 2026
 
-Running. The process `python -I -m quorate.seventh_seat_assay --candidate google/gemini-4-argon` started at
-11:03 HKT with the resolved credentials, the same way as Carbon's run, and passed its preflight within half a
-minute. Its report goes to `~/.local/state/quorate/council-seat-assays/2026-11-16-gemini-4-argon-seat.json`,
-with its log beside it under a `.log` suffix. The host's load average was about 6 on four cores at launch,
-against about 3.5 during the Carbon run, from other sessions' work.
+The run returned `admit-trial`. Argon cleared all four non-compensable floors, and its mean score of 1.175 is
+about twice the five-seat incumbent median of 0.575. Under the locked rule that admits Argon to a trial, not to
+production. The run started at 11:03 HKT and finished at 11:21 HKT. Its report is
+`~/.local/state/quorate/council-seat-assays/2026-11-16-gemini-4-argon-seat.json`, with its log beside it under a
+`.log` suffix.
+
+The judges were Claude Fable 5.2 and GPT-6.1 Sol, and all three preflight calls answered without diagnostics.
+The run is valid. Five incumbents answered all 20 cases, and K3 answered none, refused with HTTP 403 every time.
+All 20 cases had the candidate and at least five incumbents and were judged, and each judge completed all 20
+judgments.
+
+| Seat | Reachable | 60–220 words | Truncated | Median latency (s) | Mean score |
+|---|---|---|---|---|---|
+| Gemini 4 Argon, candidate | 20 | 20 | 0 | 22.2 | 1.175 |
+| Claude Opus 5.5 | 20 | 18 | 0 | 7.9 | 1.475 |
+| GPT-6.1 Sol | 20 | 20 | 0 | 46.1 | 1.375 |
+| GLM-5.3 | 20 | 20 | 0 | 8.2 | 0.575 |
+| Grok 4.7 | 20 | 20 | 0 | 14.0 | 0.525 |
+| DeepSeek V4 Pro | 20 | 20 | 0 | 8.0 | 0.325 |
+| K3 | 0 | 0 | 0 | none | none |
+
+Argon ranks third, behind Opus and GPT, as Carbon did. Its mean is close to Carbon's 1.194, though each run
+scores against its own panel, so the two means compare only loosely. Opus's two answers outside the word range
+ran to 222 and 231 words. The word floor applies only to the candidate, so they change nothing.
+
+Argon's median latency was 22.2 s against the slowest incumbent median, GPT-6.1 Sol's 46.1 s. Its slowest answer
+took 37.0 s, so all 20 of its answers came in under that median. Every answer came through Antigravity at
+Medium, with no fallback. The single-probe estimate of about 54 s recorded under the Carbon result overstated its
+median by more than double. Because debate turns run one seat at a time, Argon would add roughly 22 s to each
+debate round, against Carbon's 75 s.
+
+The scheduled Germline gate ran at the lowest priority from 11:03 to 11:13 HKT, overlapping the first ten minutes
+of this run, while no gate overlapped Carbon's. Every seat ran under the same load, and Argon cleared the latency
+floor by more than 20 seconds, so the overlap cannot change the verdict.
+
+The trial step under "Trial and Carbon plan" needs Terry's yes. He also decides whether Argon takes K3's place as
+seat four or becomes a seventh seat. The roster and seat defaults are unchanged until then.
 
 ## Limitations
 
-The default judges, Fable and GPT-5.6 Sol, score panels that include GPT-5.6 Sol and Claude Opus 5. Any
-self-preference raises the incumbent median, which biases the assay against admission. Distinctiveness is measured against the day's six
+The judges, Claude Fable 5.2 and GPT-6.1 Sol on 16 November, score panels that include GPT-6.1 Sol and Claude
+Opus 5.5. Any self-preference raises the incumbent median, which biases the assay against admission. Distinctiveness is measured against the day's six
 incumbents, so a roster change elsewhere can move the bar. The client sends `thinkingBudget`, which works on
 Gemini 3.5 Flash; whether Gemini 4 accepts it or requires `thinkingLevel` is unverified until the first
 canary.
