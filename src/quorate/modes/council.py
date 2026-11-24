@@ -153,7 +153,7 @@ async def run_council(
 ) -> str | dict[str, Any]:
     """Run full council deliberation: blind → debate → judge → critique.
 
-    Returns judge_response (str) normally, or structured dict when json_output=True.
+    Returns the synthesis as text, or a structured result for JSON or judge failure.
     """
     import sys
 
@@ -163,7 +163,7 @@ async def run_council(
         console = console or Console()
     models = models or resolved_council()
     judge = resolved_judge(judge_model)
-    judge_fallback = judge_fallback_model or resolved_judge_fallback()
+    judge_fallback = resolved_judge(judge_fallback_model or resolved_judge_fallback())
     critique = resolved_critique(critic_model)
     critique_fallback = critic_fallback_model or resolved_critique_fallback()
     run_models = parallel_runner or run_parallel
@@ -173,8 +173,7 @@ async def run_council(
     full_question = f"{context}\n\n{question}" if context else question
     start = time.monotonic()
 
-    # JSON accumulator
-    result: dict[str, Any] = {"question": question, "phases": {}} if json_output else {}
+    result: dict[str, Any] = {"question": question, "phases": {}}
 
     # --- BLIND PHASE ---
     console.print("\n[bold cyan]BLIND PHASE[/bold cyan]")
@@ -208,12 +207,11 @@ async def run_council(
             " red]"
         )
 
-    if json_output:
-        result["phases"]["blind"] = blind_json
-        result["success_count"] = success_count
-        result["failed_count"] = len(blind_failed)
-        result["quorum_target"] = quorum_target
-        result["quorum_achieved"] = quorum_achieved
+    result["phases"]["blind"] = blind_json
+    result["success_count"] = success_count
+    result["failed_count"] = len(blind_failed)
+    result["quorum_target"] = quorum_target
+    result["quorum_achieved"] = quorum_achieved
 
     if not quorum_achieved:
         message = (
@@ -323,8 +321,7 @@ async def run_council(
             if json_output:
                 stream_event("debate", entry_dict)
 
-    if json_output:
-        result["phases"]["debate"] = debate_json
+    result["phases"]["debate"] = debate_json
 
     # --- JUDGE ---
     console.print("\n[bold cyan]JUDGE SYNTHESIS[/bold cyan]")
@@ -366,7 +363,9 @@ async def run_council(
         judge_used = judge_fallback
 
     if is_error(judge_response):
-        console.print(f"[red]Judge failed: {judge_response}[/red]")
+        result["failed_phase"] = "judge"
+        result["error"] = "Council judge synthesis failed"
+        result["phases"]["judge"] = {"model": judge_used, "error": "synthesis_failed"}
         runlog.append(
             runlog.build_record(
                 mode="council",
@@ -377,10 +376,7 @@ async def run_council(
                 divergence=divergence,
             )
         )
-        if json_output:
-            result["phases"]["judge"] = {"model": judge_used, "error": judge_response}
-            return result
-        return ""
+        return result
 
     console.print(
         Panel(

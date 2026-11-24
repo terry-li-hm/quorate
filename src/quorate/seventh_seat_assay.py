@@ -13,6 +13,7 @@ import json
 import os
 import random
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from statistics import mean, median
 from typing import Any
@@ -24,6 +25,7 @@ from quorate.config import (
     ModelEntry,
     ReasoningEffort,
     _display_name,
+    _normalize_model,
     resolved_council,
     resolved_judge,
     resolved_judge_fallback,
@@ -71,9 +73,50 @@ def assay_judges(models: tuple[str, str] | None = None) -> tuple[ModelEntry, Mod
     """Resolve the two panel judges, defaulting to the council's judge pair."""
     if models is None:
         models = (resolved_judge(), resolved_judge_fallback())
-    if len(models) != 2 or len(set(models)) != 2:
+    models = tuple(_normalize_model(model) for model in models)
+    if len(models) != 2 or not all(models) or len(set(models)) != 2:
         raise ValueError("assay judges require exactly two distinct model IDs")
     return (candidate_seat(models[0]), candidate_seat(models[1]))
+
+
+@dataclass(frozen=True)
+class Seat:
+    seat_id: str
+    role: str
+    entry: ModelEntry
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "seat_id": self.seat_id,
+            "role": self.role,
+            "requested_model": self.entry.model,
+            "display_name": self.entry.name,
+        }
+
+
+def _manifest(incumbents: list[ModelEntry], candidate: ModelEntry) -> tuple[Seat, ...]:
+    def bind(index: int, role: str, entry: ModelEntry) -> Seat:
+        return Seat(f"s{index:02}", role, entry._replace(model=_normalize_model(entry.model)))
+
+    return (
+        *(bind(i, "incumbent", entry) for i, entry in enumerate(incumbents, 1)),
+        bind(7, "candidate", candidate),
+    )
+
+
+def _panel_error(manifest: tuple[Seat, ...]) -> str | None:
+    if len(manifest) != 7:
+        return f"Expected six incumbents and one candidate; got {len(manifest)} total seats."
+    slots: dict[str, str] = {}
+    for seat in manifest:
+        slot = f"{seat.role} {seat.seat_id}"
+        model = seat.entry.model
+        if not model:
+            return f"Missing requested model ID for {slot}."
+        if model in slots:
+            return f"Requested model collision: {slots[model]} and {slot} both request {model}."
+        slots[model] = slot
+    return None
 
 
 def preflight_row(result: ModelCallResult) -> dict[str, Any]:
@@ -87,13 +130,14 @@ def preflight_row(result: ModelCallResult) -> dict[str, Any]:
     }
 
 
-def seat_row(case: Case, result: ModelCallResult, role: str) -> dict[str, Any]:
+def seat_row(case: Case, result: ModelCallResult, seat: Seat) -> dict[str, Any]:
     """One seat's outcome for one case. Never stores response text."""
     reachable = not result.is_error
     return {
         "case": case.id,
-        "role": role,
-        "model": result.name,
+        "seat_id": seat.seat_id,
+        "role": seat.role,
+        "model": seat.entry.name,
         "model_id": result.model_id,
         "provider": result.provider,
         "reachable": reachable,
@@ -105,10 +149,10 @@ def seat_row(case: Case, result: ModelCallResult, role: str) -> dict[str, Any]:
     }
 
 
-def panel_order(case: Case, judge_name: str, model_names: list[str]) -> list[str]:
-    """Deterministic per-judge shuffle over the alphabetically sorted panel names."""
-    ordered = sorted(model_names)
-    random.Random(f"{SUITE_VERSION}:{case.id}:{judge_name}").shuffle(ordered)
+def panel_order(case: Case, judge_id: str, seat_ids: list[str]) -> list[str]:
+    """Deterministic per-judge shuffle, independent of presentation aliases."""
+    ordered = sorted(seat_ids)
+    random.Random(f"{SUITE_VERSION}:{case.id}:{judge_id}").shuffle(ordered)
     return ordered
 
 
@@ -141,22 +185,21 @@ def parse_scores(response: str, labels: str) -> dict[str, int] | None:
 def judgment_row(
     case: Case,
     result: ModelCallResult,
-    name_by_label: dict[str, str],
+    judge_id: str,
+    seat_by_label: dict[str, str],
     scores: dict[str, int] | None,
 ) -> dict[str, Any]:
     """One judge's panel judgment for one case. Never stores judge response text."""
     return {
         "case": case.id,
+        "judge_id": judge_id,
         "judge": result.name,
         "judge_model_id": result.model_id,
         "provider": result.provider,
         "reachable": not result.is_error,
         "contract_completed": scores is not None,
-        "labels": dict(name_by_label),
-        "scores": {
-            model_name: scores.get(label) if scores else None
-            for label, model_name in name_by_label.items()
-        },
+        "labels": seat_by_label,
+        "scores": {sid: scores[label] if scores else None for label, sid in seat_by_label.items()},
         "latency_s": round(result.latency_s, 2),
         "diagnostics": list(result.diagnostics),
     }
@@ -164,12 +207,13 @@ def judgment_row(
 
 def summarize_seats(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     summaries: list[dict[str, Any]] = []
-    for name in dict.fromkeys(row["model"] for row in rows):
-        model_rows = [row for row in rows if row["model"] == name]
+    for sid in dict.fromkeys(row["seat_id"] for row in rows):
+        model_rows = [row for row in rows if row["seat_id"] == sid]
         latencies = [float(row["latency_s"]) for row in model_rows if row["reachable"]]
         summaries.append(
             {
-                "model": name,
+                "seat_id": sid,
+                "model": model_rows[0]["model"],
                 "role": model_rows[0]["role"],
                 "attempts": len(model_rows),
                 "reachable": sum(bool(row["reachable"]) for row in model_rows),
@@ -184,11 +228,12 @@ def summarize_seats(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def summarize_judges(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     summaries: list[dict[str, Any]] = []
-    for name in dict.fromkeys(row["judge"] for row in rows):
-        judge_rows = [row for row in rows if row["judge"] == name]
+    for jid in dict.fromkeys(row["judge_id"] for row in rows):
+        judge_rows = [row for row in rows if row["judge_id"] == jid]
         summaries.append(
             {
-                "judge": name,
+                "judge_id": jid,
+                "judge": judge_rows[0]["judge"],
                 "cases": len(judge_rows),
                 "reachable": sum(bool(row["reachable"]) for row in judge_rows),
                 "contract_completed": sum(bool(row["contract_completed"]) for row in judge_rows),
@@ -221,20 +266,22 @@ def admission_decision(
     seat_summaries: list[dict[str, Any]],
     judge_summaries: list[dict[str, Any]],
     scores: dict[str, float | None],
-    candidate_name: str,
+    candidate_id: str,
 ) -> dict[str, Any]:
     incumbents = [row for row in seat_summaries if row["role"] == "incumbent"]
-    candidate = next((row for row in seat_summaries if row["model"] == candidate_name), None)
+    candidate = next((row for row in seat_summaries if row["seat_id"] == candidate_id), None)
     incumbent_means = [
-        float(scores[row["model"]]) for row in incumbents if scores.get(row["model"]) is not None
+        float(scores[row["seat_id"]])
+        for row in incumbents
+        if scores.get(row["seat_id"]) is not None
     ]
     incumbent_median = round(median(incumbent_means), 3) if incumbent_means else None
-    candidate_score = scores.get(candidate_name)
+    candidate_score = scores.get(candidate_id)
     candidate_mean = round(candidate_score, 3) if candidate_score is not None else None
     if candidate is None:
         return _decision(
             "invalid-run",
-            f"No seat summary for candidate {candidate_name}.",
+            f"No seat summary for candidate {candidate_id}.",
             candidate_mean,
             incumbent_median,
             {},
@@ -345,9 +392,8 @@ async def run_assay(
     """Run the seventh-seat panel-uniqueness assay and return its report."""
     query_seats = seat_runner or run_parallel
     query_judges = judge_runner or run_parallel
-    candidate = candidate_seat(candidate_model)
-    incumbents = incumbent_seats()
-    panel_judges = assay_judges(judges)
+    manifest = _manifest(incumbent_seats(), candidate_seat(candidate_model))
+    candidate = manifest[-1]
     seat_semaphore = asyncio.Semaphore(concurrency)
     judge_semaphore = asyncio.Semaphore(concurrency)
 
@@ -362,42 +408,49 @@ async def run_assay(
         )
         return results[0]
 
-    candidate_probe = await preflight(candidate, query_seats)
-    judge_probes = [await preflight(judge, query_judges) for judge in panel_judges]
-    probes = [candidate_probe, *judge_probes]
     report: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "suite_version": SUITE_VERSION,
         "ts": dt.datetime.now(dt.timezone.utc).isoformat(),
         "cases": len(CASES),
-        "candidate": {"name": candidate.name, "model": candidate.model},
-        "incumbents": [{"name": seat.name, "model": seat.model} for seat in incumbents],
-        "judges": [{"name": judge.name, "model": judge.model} for judge in panel_judges],
-        "preflight": [preflight_row(result) for result in probes],
+        "manifest": [seat.to_dict() for seat in manifest],
+        "candidate": {"name": candidate.entry.name, "model": candidate.entry.model},
+        "incumbents": [{"name": s.entry.name, "model": s.entry.model} for s in manifest[:-1]],
+        "judges": [],
+        "preflight": [],
     }
-    failed = [result.name for result in probes if result.is_error]
+
+    def invalid_run(reason: str) -> dict[str, Any]:
+        return {
+            **report,
+            "primary_metric": None,
+            "admission_rule": None,
+            "seat_summaries": [],
+            "judge_summaries": [],
+            "mean_scores": {},
+            "decision": _decision("invalid-run", reason, None, None, {}),
+            "seat_attempts": [],
+            "judgments": [],
+            "responses_retained": False,
+        }
+
+    error = _panel_error(manifest)
+    if error:
+        return invalid_run(error)
+
+    panel_judges = assay_judges(judges)
+    report["judges"] = [{"name": judge.name, "model": judge.model} for judge in panel_judges]
+    probe = await preflight(candidate.entry, query_seats)
+    probes = [dict(preflight_row(probe), seat_id=candidate.seat_id)]
+    for judge in panel_judges:
+        probe = await preflight(judge, query_judges)
+        probes.append(dict(preflight_row(probe), judge_id=judge.model))
+    report["preflight"] = probes
+    failed = [row["name"] for row in probes if not row["reachable"]]
     if failed:
-        report.update(
-            {
-                "primary_metric": None,
-                "admission_rule": None,
-                "seat_summaries": [],
-                "judge_summaries": [],
-                "mean_scores": {},
-                "decision": _decision(
-                    "invalid-run",
-                    f"Preflight failed for: {', '.join(failed)}. "
-                    "No seat or judge queries were made.",
-                    None,
-                    None,
-                    {},
-                ),
-                "seat_attempts": [],
-                "judgments": [],
-                "responses_retained": False,
-            }
+        return invalid_run(
+            f"Preflight failed for: {', '.join(failed)}. No seat or judge queries were made."
         )
-        return report
 
     async def query_seat(case: Case, seat: ModelEntry) -> ModelCallResult:
         async with seat_semaphore:
@@ -411,31 +464,21 @@ async def run_assay(
             )
             return results[0]
 
-    jobs = [(case, seat) for case in CASES for seat in (candidate, *incumbents)]
-    gathered = await asyncio.gather(*(query_seat(case, seat) for case, seat in jobs))
-    results = {
-        (case.id, seat.model): result for (case, seat), result in zip(jobs, gathered, strict=True)
+    jobs = {
+        (case.id, seat.seat_id): query_seat(case, seat.entry) for case in CASES for seat in manifest
     }
+    results = dict(zip(jobs, await asyncio.gather(*jobs.values()), strict=True))
     seat_rows = [
-        seat_row(
-            case,
-            results[(case.id, seat.model)],
-            "candidate" if seat.model == candidate.model else "incumbent",
-        )
-        for case in CASES
-        for seat in (candidate, *incumbents)
+        seat_row(case, results[case.id, seat.seat_id], seat) for case in CASES for seat in manifest
     ]
 
-    async def judge_panel(case: Case, panel: list[tuple[str, str]]) -> list[dict[str, Any]]:
+    async def judge_panel(case: Case, panel: dict[str, str]) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
         async with judge_semaphore:
             for judge in panel_judges:
-                ordered = panel_order(case, judge.name, [name for name, _ in panel])
-                name_by_label = dict(zip(LABELS[: len(ordered)], ordered, strict=True))
-                response_by_name = dict(panel)
-                labelled = {
-                    label: response_by_name[name_by_label[label]] for label in name_by_label
-                }
+                ordered = panel_order(case, judge.model, list(panel))
+                seat_by_label = dict(zip(LABELS[: len(ordered)], ordered, strict=True))
+                labelled = {label: panel[sid] for label, sid in seat_by_label.items()}
                 result = (
                     await _call_runner(
                         query_judges,
@@ -450,24 +493,21 @@ async def run_assay(
                     )
                 )[0]
                 scores = (
-                    parse_scores(result.response, "".join(name_by_label))
+                    parse_scores(result.response, "".join(seat_by_label))
                     if not result.is_error
                     else None
                 )
-                rows.append(judgment_row(case, result, name_by_label, scores))
+                rows.append(judgment_row(case, result, judge.model, seat_by_label, scores))
         return rows
 
-    panels: list[tuple[Case, list[tuple[str, str]]]] = []
+    panels: list[tuple[Case, dict[str, str]]] = []
     for case in CASES:
-        candidate_result = results[(case.id, candidate.model)]
-        if candidate_result.is_error:
-            continue
-        panel = [(candidate_result.name, candidate_result.response)]
-        for seat in incumbents:
-            result = results[(case.id, seat.model)]
+        panel = {}
+        for seat in manifest:
+            result = results[case.id, seat.seat_id]
             if not result.is_error:
-                panel.append((result.name, result.response))
-        if len(panel) >= 6:
+                panel[seat.seat_id] = result.response
+        if candidate.seat_id in panel and len(panel) >= 6:
             panels.append((case, panel))
     judgment_nested = await asyncio.gather(*(judge_panel(case, panel) for case, panel in panels))
     judgment_rows = [row for rows in judgment_nested for row in rows]
@@ -485,7 +525,9 @@ async def run_assay(
             "seat_summaries": seat_summaries,
             "judge_summaries": judge_summaries,
             "mean_scores": scores,
-            "decision": admission_decision(seat_summaries, judge_summaries, scores, candidate.name),
+            "decision": admission_decision(
+                seat_summaries, judge_summaries, scores, candidate.seat_id
+            ),
             "seat_attempts": seat_rows,
             "judgments": judgment_rows,
             "responses_retained": False,

@@ -1,9 +1,13 @@
 """Tests for council quorum and judge fallback behavior."""
 
 import asyncio
+import json
 
+import pytest
+from porin import EXIT_ERROR
 from rich.console import Console
 
+from quorate.cli import _emit_result
 from quorate.config import ModelCallResult, ModelEntry
 from quorate.modes import council
 
@@ -228,9 +232,91 @@ def test_council_logs_member_calls_when_judge_fails(monkeypatch):
     )
 
     assert isinstance(result, dict)
-    assert result["phases"]["judge"]["error"] == "[Error: judge unavailable]"
+    assert result["phases"]["judge"]["error"] == "synthesis_failed"
     assert len(appended) == 1
     assert sum(row["calls"] for row in appended[0].model_usage) == 4
+
+
+@pytest.mark.parametrize("json_output", [False, True])
+@pytest.mark.parametrize(
+    ("primary", "fallback", "winner", "expected"),
+    [
+        ("primary", "backup", None, ["primary", "backup"]),
+        ("primary", "primary", None, ["primary"]),
+        ("opus", "opus", None, ["anthropic/claude-opus-5-5"]),
+        ("primary", "backup", "primary", ["primary"]),
+        ("primary", "backup", "backup", ["primary", "backup"]),
+    ],
+)
+def test_q1_judge_terminal_result(
+    json_output, primary, fallback, winner, expected, monkeypatch, capsys, tmp_path
+):
+    monkeypatch.chdir(tmp_path)
+    models = [ModelEntry("First", "fake/one"), ModelEntry("Second", "fake/two")]
+    attempts, records = [], []
+
+    async def blind(entries, *_args, **_kwargs):
+        return [ModelCallResult(e.name, e.model, "Synthetic claim") for e in entries]
+
+    async def judge(model, *_args, **_kwargs):
+        attempts.append(model)
+        return "Synthetic recommendation" if model == winner else "[Error: SYNTHETIC_SECRET_DETAIL]"
+
+    monkeypatch.setattr(council.runlog, "append", records.append)
+    monkeypatch.setattr(council.runlog, "prompt_outcome", lambda **_: (None, None, None))
+    result = asyncio.run(
+        council.run_council(
+            "Question",
+            models=models,
+            rounds=0,
+            score_divergence=False,
+            no_critic=winner is not None,
+            judge_model=primary,
+            judge_fallback_model=fallback,
+            console=Console(quiet=json_output),
+            json_output=json_output,
+            parallel_runner=blind,
+            judge_runner=judge,
+        )
+    )
+    if winner is None:
+        assert result["failed_phase"] == "judge"
+        assert result["error"] == "Council judge synthesis failed"
+        assert result["phases"]["judge"] == {"model": expected[-1], "error": "synthesis_failed"}
+        assert [r["model"] for r in result["phases"]["blind"]] == ["First", "Second"]
+        assert result["phases"]["debate"] == [] and "critique" not in result["phases"]
+        assert (result["success_count"], result["failed_count"], result["quorum_target"]) == (
+            2,
+            0,
+            2,
+        )
+        assert result["quorum_achieved"] is True
+        with pytest.raises(SystemExit) as exc:
+            _emit_result("quorate council", result, json_output)
+        assert exc.value.code == EXIT_ERROR
+    else:
+        assert _emit_result("quorate council", result, json_output) is None  # normal exit 0
+
+    assert attempts == expected
+    assert len(records) == 1 and records[0].judge_model == expected[-1]
+    captured = capsys.readouterr()
+    output = captured.out + captured.err
+    assert "SYNTHETIC_SECRET_DETAIL" not in output
+    if winner is None:
+        assert "recommendation" not in output.lower()
+        assert "Council judge synthesis failed" in output
+    else:
+        assert "Synthetic recommendation" in output
+    if json_output:
+        *events, envelope = map(json.loads, captured.out.splitlines())
+        assert envelope["ok"] is (winner is not None)
+        if winner is None:
+            assert envelope["result"] == result
+            assert [event["type"] for event in events] == ["blind", "blind"]
+        else:
+            assert envelope["result"]["phases"]["judge"]["model"] == winner
+    else:
+        assert '"ok":' not in output
 
 
 def test_council_scores_blind_divergence_before_debate(monkeypatch):

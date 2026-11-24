@@ -5,11 +5,12 @@ import json
 import os
 import re
 import sys
+from collections import Counter
 
 import pytest
 
 from quorate import seventh_seat_assay
-from quorate.config import ModelCallResult
+from quorate.config import ModelCallResult, ModelEntry
 from quorate.council_seat_assay import CASES, FABLE, GPT
 from quorate.seventh_seat_assay import (
     DEFAULT_CANDIDATE,
@@ -78,6 +79,7 @@ def _seat_summary(
     median_latency=20.0,
 ):
     return {
+        "seat_id": model,
         "model": model,
         "role": role,
         "attempts": attempts,
@@ -224,7 +226,7 @@ def test_run_assay_with_fake_runners_scores_and_retains_no_text(monkeypatch):
     assert len(report["judgments"]) == 38
 
     incumbent_means = [
-        report["mean_scores"][name] for name in report["mean_scores"] if name != "Gemini-4-Argon"
+        report["mean_scores"][s["seat_id"]] for s in report["manifest"] if s["role"] == "incumbent"
     ]
     assert incumbent_means == [1.0] * 6
 
@@ -298,7 +300,8 @@ def _counting_runner(calls, kind, *, fail_preflight_for=None):
     return runner
 
 
-def test_preflight_failure_returns_invalid_run_without_seat_queries():
+def test_preflight_failure_returns_invalid_run_without_seat_queries(monkeypatch):
+    monkeypatch.setenv("CONSILIUM_MODEL_M4", "kimi-code/k3")
     calls = {"seat": [], "judge": []}
     seat_runner = _counting_runner(calls, "seat", fail_preflight_for=DEFAULT_CANDIDATE)
     judge_runner = _counting_runner(calls, "judge")
@@ -334,6 +337,134 @@ def test_preflight_failure_returns_invalid_run_without_seat_queries():
     assert len(calls["seat"]) == 1
     assert all(c[1] == PREFLIGHT_PROMPT for c in calls["seat"])
     assert [c for c in calls["judge"] if c[1] != PREFLIGHT_PROMPT] == []
+
+
+@pytest.mark.parametrize(
+    ("overrides", "model", "slots", "judges"),
+    [
+        ({}, DEFAULT_CANDIDATE, ("incumbent s04", "candidate s07"), None),
+        ({}, DEFAULT_CANDIDATE, ("incumbent s04", "candidate s07"), ("fable", "fable")),
+        (
+            {1: "fake/dup", 5: "fake/dup", 4: "kimi-code/k3"},
+            "fake/dup",
+            ("incumbent s01", "incumbent s05"),
+            None,
+        ),
+        (
+            {4: "kimi-code/k3", 2: DEFAULT_CANDIDATE},
+            DEFAULT_CANDIDATE,
+            ("incumbent s02", "candidate s07"),
+            None,
+        ),
+    ],
+)
+def test_q2_identity_rejects_model_collision(overrides, model, slots, judges, monkeypatch):
+    for i in range(1, 8):
+        monkeypatch.delenv(f"CONSILIUM_MODEL_M{i}", raising=False)
+    for i, value in overrides.items():
+        monkeypatch.setenv(f"CONSILIUM_MODEL_M{i}", value)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("invalid panel reached runner")
+
+    report = asyncio.run(run_assay(seat_runner=forbidden, judge_runner=forbidden, judges=judges))
+    decision = report["decision"]
+    assert decision["action"] == "invalid-run"
+    assert all(part in decision["reason"] for part in (*slots, model))
+    assert decision["candidate_mean"] is decision["incumbent_median"] is None
+    assert decision["floors"] == report["mean_scores"] == {}
+    assert report["responses_retained"] is False
+    for key in ("preflight", "seat_attempts", "judgments", "seat_summaries", "judge_summaries"):
+        assert report[key] == []
+
+
+def test_q2_identity_scores_each_slot_independently_of_alias(monkeypatch):
+    # All requested IDs differ; all seat (and judge) display names initially coincide.
+    models = [f"vendor{i}/shared" for i in range(1, 8)]
+    judges = ("one/referee", "two/referee")
+    ids = [f"s{i:02}" for i in range(1, 8)]
+    case_index = {case.question: i for i, case in enumerate(CASES)}
+    observed = {}
+
+    def seats(entries, messages, **_):
+        (entry,) = entries
+        question = messages[-1].content
+        answer = (
+            "READY"
+            if question == PREFLIGHT_PROMPT
+            else (
+                f"{SEAT_TOKEN}:{models.index(entry.model) + 1}:{case_index[question]} "
+                + "padding " * 60
+            )
+        )
+        return [ModelCallResult(entry.name, "shared", answer)]
+
+    def score(slot, case_num):
+        return 2 if case_num < 2 * slot else 0
+
+    def referee(entries, messages, **_):
+        (judge,) = entries
+        prompt = messages[-1].content
+        answer = "READY"
+        if prompt != PREFLIGHT_PROMPT:
+            (case,) = [c for c in CASES if c.question in prompt]
+            blocks = re.findall(rf"<response_([A-G])>\n{SEAT_TOKEN}:(\d+):(\d+) ", prompt)
+            assert len(blocks) == 7
+            assert sorted(int(slot) for _, slot, _ in blocks) == list(range(1, 8))
+            assert all(int(n) == case_index[case.question] for _, _, n in blocks)
+            assert not any(key in prompt for key in (*ids, *models, *judges))
+            observed[case.id, judge.model] = {
+                label: ids[int(slot) - 1] for label, slot, _ in blocks
+            }
+            pairs = [f"{label}={score(int(slot), int(n))}" for label, slot, n in blocks]
+            answer = f"{JUDGE_TOKEN}\nSCORES: " + " ".join(pairs)
+        return [ModelCallResult(judge.name, "referee", answer)]
+
+    for renamed in (False, True):
+        observed.clear()
+        entries = [
+            ModelEntry(f"Alias-{i}" if renamed else "Shared", m) for i, m in enumerate(models)
+        ]
+        monkeypatch.setattr(seventh_seat_assay, "incumbent_seats", lambda: entries[:-1])
+        monkeypatch.setattr(
+            seventh_seat_assay,
+            "candidate_seat",
+            lambda m: entries[-1] if m == models[-1] else ModelEntry("Referee", m),
+        )
+        report = asyncio.run(
+            run_assay(models[-1], seat_runner=seats, judge_runner=referee, judges=judges)
+        )
+        manifest = report["manifest"]
+        assert [s["seat_id"] for s in manifest] == ids
+        assert [s["requested_model"] for s in manifest] == models
+        assert [s["display_name"] for s in manifest] == [e.name for e in entries]
+        attempts = report["seat_attempts"]
+        assert Counter(r["role"] for r in attempts) == {"candidate": 20, "incumbent": 120}
+        assert len({(r["case"], r["seat_id"]) for r in attempts}) == 140
+        assert {s["seat_id"]: s["attempts"] for s in report["seat_summaries"]} == dict.fromkeys(
+            ids, 20
+        )
+        assert {
+            j["judge_id"]: j["contract_completed"] for j in report["judge_summaries"]
+        } == dict.fromkeys(judges, 20)
+        assert len(report["judgments"]) == len(observed) == 40
+        case_nums = {c.id: i for i, c in enumerate(CASES)}
+        for row in report["judgments"]:
+            assert (
+                row["contract_completed"]
+                and row["labels"] == observed[row["case"], row["judge_id"]]
+            )
+            assert row["scores"] == {
+                sid: score(i, case_nums[row["case"]]) for i, sid in enumerate(ids, 1)
+            }
+        assert report["mean_scores"] == {sid: i / 5 for i, sid in enumerate(ids, 1)}
+        assert report["decision"]["candidate_mean"] == 1.4
+        assert report["decision"]["incumbent_median"] == 0.7
+        assert report["decision"]["action"] == "admit-trial"
+        assert report["responses_retained"] is False
+        assert not any(
+            token in json.dumps(report) for token in (SEAT_TOKEN, JUDGE_TOKEN, "padding")
+        )
 
 
 def test_candidate_floor_failure_retains_before_judge_validity():

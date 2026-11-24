@@ -396,8 +396,11 @@ def _resolve_local_runner(local: bool, workspace: str | None):
 
 
 def _emit_result(command: str, result: str | dict | None, json_output: bool) -> None:
-    """Emit result as porin envelope when in JSON mode."""
+    """Emit terminal failures or, in JSON mode, a porin envelope."""
     if not json_output:
+        if isinstance(result, dict) and result.get("failed_phase") == "judge":
+            Console(stderr=True).print(result["error"])
+            raise SystemExit(EXIT_ERROR)
         return
     if not result:
         emit_err(
