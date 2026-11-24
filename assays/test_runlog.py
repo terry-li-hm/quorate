@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import json
 from pathlib import Path
@@ -10,6 +11,7 @@ import pytest
 
 from quorate import runlog
 from quorate.config import ModelCallResult
+from quorate.divergence import format_divergence, parse_divergence
 
 
 def _result(
@@ -480,3 +482,124 @@ def test_usage_report_rolls_up_divergence_by_decision_value(tmp_path):
     assert summary["distinct_positions"] == {"1": 2, "3": 1}
     assert summary["mean_index_by_decision_value"]["improved"] == {"runs": 1, "mean_index": 60.0}
     assert summary["mean_index_by_decision_value"]["unchanged"] == {"runs": 2, "mean_index": 15.0}
+
+
+LABEL = "The fictitious cobalt goose prefers winter."
+SENTINELS = [LABEL, "SECRET_PROMPT", "SECRET_NESTED", "SECRET_ANSWER"]
+
+
+@pytest.fixture
+def grouping():
+    names = ["A", "B", "C", "D"]
+    results = [_result(n, f"seat-{n}", response="SECRET_ANSWER") for n in names]
+    groups = [{"label": LABEL, "members": names[:3]}, {"label": LABEL, "members": names[3:]}]
+    live = parse_divergence(json.dumps({"positions": groups}), names)
+    assert live is not None and LABEL in format_divergence(live)
+    live["prompt"] = "SECRET_PROMPT"
+    live["positions"][0]["extra"] = {"nested": ["SECRET_NESTED"]}
+    return results, live
+
+
+def test_q4_durable_projection_and_historical_rollup(tmp_path, grouping):
+    results, live = grouping
+    original = copy.deepcopy(live)
+    path = tmp_path / "runs.jsonl"
+    record = runlog.build_record("council", results, 1, divergence=live)
+    durable = {
+        "index": 25.0,
+        "distinct_positions": 2,
+        "largest_bloc": 3,
+        "panel_size": 4,
+        "positions": [{"members": ["seat-A", "seat-B", "seat-C"]}, {"members": ["seat-D"]}],
+    }
+    assert record.to_dict()["divergence"] == durable
+    assert runlog.RunRecord(**record.to_dict()).to_dict()["divergence"] == durable
+    runlog.append(record, path)
+    raw = path.read_bytes()
+    assert all(s.encode() not in raw for s in [*SENTINELS, '"label"'])
+    assert json.loads(raw)["divergence"] == durable
+    assert live == original
+
+    record.divergence = None
+    runlog.append(record, path)
+    historical = record.to_dict()
+    historical["divergence"] = parse_divergence(
+        json.dumps(
+            {
+                "positions": [
+                    {"members": ["A", "B"], "label": LABEL},
+                    {"members": ["C", "D"], "label": LABEL},
+                ]
+            }
+        ),
+        ["A", "B", "C", "D"],
+    )
+    with path.open("a") as f:
+        f.write(json.dumps(historical) + "\n")
+    report = runlog.usage_report(path=path)
+    assert LABEL not in json.dumps(report)
+    assert report["runs"] == 3
+    assert report["divergence"] == {
+        "scored_runs": 2,
+        "mean_index": 37.5,
+        "min_index": 25.0,
+        "max_index": 50.0,
+        "distinct_positions": {"2": 2},
+        "mean_index_by_decision_value": {},
+    }
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        None,
+        {"index": "25"},
+        {"index": float("nan")},
+        {"index": float("inf")},
+        {"index": 10**400},
+        {"index": 0.0},
+        {"panel_size": True},
+        {"largest_bloc": 3.0},
+        {"distinct_positions": 1},
+        {"positions": {}},
+        {"positions": [None]},
+        {"positions": [{"members": [[]]}]},
+        {"positions": [{"members": [LABEL]}]},
+        {"positions": [{"members": ["A", "B", "C"]}, {"members": ["A"]}]},
+        {"positions": [{"members": ["A", "B", "C"]}]},
+    ],
+)
+def test_q4_durable_invalid_assignment(tmp_path, grouping, change):
+    results, live = grouping
+    record = runlog.build_record("council", results, 1)
+    record.divergence = None if change is None else live | change
+    raw = runlog.append(record, tmp_path / "runs").read_bytes()
+    assert json.loads(raw)["divergence"] is None
+    assert all(s.encode() not in raw for s in SENTINELS)
+
+
+def test_q4_durable_requires_successful_seats(tmp_path, grouping):
+    results, live = grouping
+    record = runlog.RunRecord(**runlog.build_record("council", results, 1).to_dict())
+    record.divergence = live
+    path = tmp_path / "runs"
+    runlog.append(record, path)
+    assert json.loads(path.read_bytes())["divergence"]["index"] == 25.0
+    record.models[-1]["ok"] = False
+    runlog.append(record, path)
+    raw = path.read_bytes()
+    assert json.loads(raw.splitlines()[1])["divergence"] is None
+    assert all(s.encode() not in raw for s in SENTINELS)
+
+
+@pytest.mark.parametrize("include_valid_seats", [False, True])
+def test_q4_durable_malformed_roster_row(tmp_path, grouping, include_valid_seats):
+    results, live = grouping
+    fields = runlog.build_record("council", results, 1).to_dict()
+    fields["models"] = [*fields["models"], None] if include_valid_seats else [None]
+    fields["divergence"] = live
+    record = runlog.RunRecord(**fields)
+    assert record.to_dict()["divergence"] is None
+    raw = runlog.append(record, tmp_path / "runs").read_bytes()
+    assert json.loads(raw)["divergence"] is None
+    assert all(s.encode() not in raw for s in SENTINELS)

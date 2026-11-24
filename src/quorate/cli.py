@@ -7,7 +7,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Never
 
 import cyclopts
 from porin import EXIT_ERROR, CommandTree, action, emit_err, emit_ok, err
@@ -397,12 +397,28 @@ def _resolve_local_runner(local: bool, workspace: str | None):
 
 def _emit_result(command: str, result: str | dict | None, json_output: bool) -> None:
     """Emit terminal failures or, in JSON mode, a porin envelope."""
-    if not json_output:
-        if isinstance(result, dict) and result.get("failed_phase") == "judge":
-            Console(stderr=True).print(result["error"])
-            raise SystemExit(EXIT_ERROR)
+    if isinstance(result, dict) and "terminal" in result:
+        terminal = result["terminal"]
+        status = terminal["status"]
+        counts = (
+            f"{result['success_count']} successful initial responses, "
+            f"{result['failed_count']} failed; {result['quorum_target']} required"
+        )
+        if status == "failed":
+            reason = "No quorum" if terminal["reason_code"] == "no_quorum" else result["error"]
+            message = f"Failed in {terminal['failed_phase']}: {reason} ({counts})"
+            if json_output:
+                _emit_failure(command, result, message, terminal["exit_code"])
+            Console(stderr=True).print(message)
+            raise SystemExit(terminal["exit_code"])
+        if not json_output:
+            if status == "partial":
+                Console().print(f"Partial: missing seat contributions ({counts})")
+            return
+    # Non-deliberation reports and older structured results have no terminal block.
+    elif not json_output:
         return
-    if not result:
+    elif not result:
         emit_err(
             command,
             "No result produced",
@@ -410,28 +426,17 @@ def _emit_result(command: str, result: str | dict | None, json_output: bool) -> 
             fix="Check model availability with: quorate quick 'test'",
         )
         return
-    if isinstance(result, dict) and result.get("error"):
-        envelope = err(
-            command,
-            str(result["error"]),
-            EXIT_ERROR,
-            fix="Inspect the failed phase and its sanitized route diagnostics.",
-        )
-        envelope["result"] = result
-        print(json.dumps(envelope, ensure_ascii=False))
-        raise SystemExit(EXIT_ERROR)
-    if isinstance(result, dict) and result.get("quorum_achieved") is False:
+    elif isinstance(result, dict) and result.get("error"):
+        _emit_failure(command, result, str(result["error"]), EXIT_ERROR)
+    elif isinstance(result, dict) and result.get("quorum_achieved") is False:
         success_count = result.get("success_count", 0)
         quorum_target = result.get("quorum_target", 0)
-        envelope = err(
+        _emit_failure(
             command,
+            result,
             f"No quorum: {success_count} successful responses; {quorum_target} required",
             EXIT_ERROR,
-            fix="Run a sanitized smoke test and inspect each failed route's diagnostics.",
         )
-        envelope["result"] = result
-        print(json.dumps(envelope, ensure_ascii=False))
-        raise SystemExit(EXIT_ERROR)
     data = result if isinstance(result, dict) else {"response": result}
     emit_ok(
         command,
@@ -440,6 +445,15 @@ def _emit_result(command: str, result: str | dict | None, json_output: bool) -> 
             action("quorate redteam --context <file>", "Stress-test the synthesis"),
         ],
     )
+
+
+def _emit_failure(command: str, result: dict, message: str, code: int) -> Never:
+    envelope = err(
+        command, message, code, fix="Inspect the failed phase and its route diagnostics."
+    )
+    envelope["result"] = result
+    print(json.dumps(envelope, ensure_ascii=False))
+    raise SystemExit(code)
 
 
 # --- Presets: named council configurations ---

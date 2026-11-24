@@ -12,6 +12,7 @@ from rich.panel import Panel
 from quorate import runlog
 from quorate.api import quorum_health, run_parallel
 from quorate.config import Message, ModelCallResult, ModelEntry, ReasoningEffort, quick_models
+from quorate.modes import terminal
 
 
 async def run_quick(
@@ -23,9 +24,9 @@ async def run_quick(
     console: Console | None = None,
     json_output: bool = False,
     parallel_runner: Callable[..., Awaitable[list[ModelCallResult]]] | None = None,
-) -> str | dict[str, Any]:
+) -> dict[str, Any]:
     """Run quick parallel query across all models."""
-    console = console or Console()
+    console = console or Console(quiet=json_output)
     models = models or quick_models()
     full_question = f"{context}\n\n{question}" if context else question
     messages = [Message.user(full_question)]
@@ -44,8 +45,7 @@ async def run_quick(
     )
 
     duration = time.monotonic() - start
-    transcript_parts = []
-    responses_json: list[dict[str, str]] = []
+    responses_json: list[dict[str, Any]] = []
 
     for mcr in results:
         if mcr.is_error:
@@ -54,7 +54,6 @@ async def run_quick(
             console.print(
                 Panel(Markdown(mcr.response), title=f"[bold]{mcr.name}[/bold]", border_style="dim")
             )
-            transcript_parts.append(f"### {mcr.name}\n{mcr.response}")
         responses_json.append(mcr.to_dict())
 
     failed = [mcr for mcr in results if mcr.is_error]
@@ -78,15 +77,17 @@ async def run_quick(
         console.print(f"[dim]{line}[/dim]")
     console.print(f"[dim]{summary}[/dim]")
 
-    if json_output:
-        return {
-            "question": question,
-            "responses": responses_json,
-            "success_count": success_count,
-            "failed_count": len(failed),
-            "quorum_target": quorum_target,
-            "quorum_achieved": quorum_achieved,
-            "duration_s": round(duration, 1),
-        }
-
-    return "\n\n".join(transcript_parts)
+    return {
+        "question": question,
+        "responses": responses_json,
+        "success_count": success_count,
+        "failed_count": len(failed),
+        "quorum_target": quorum_target,
+        "quorum_achieved": quorum_achieved,
+        "duration_s": round(duration, 1),
+        "terminal": (
+            terminal.finished(missing_contributions=bool(failed))
+            if quorum_achieved
+            else terminal.failed("responses", "no_quorum")
+        ),
+    }

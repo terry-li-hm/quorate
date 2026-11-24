@@ -27,6 +27,7 @@ from quorate.config import (
 )
 from quorate.divergence import divergence_messages, format_divergence, parse_divergence
 from quorate.heavyskill import prune_cot, shuffle_traces
+from quorate.modes import terminal
 from quorate.prompts import (
     BLIND_SYSTEM,
     CHALLENGER_ADDITION,
@@ -150,11 +151,8 @@ async def run_council(
     judge_runner: Callable[..., Awaitable[str]] | None = None,
     judge_fallback_model: str | None = None,
     critic_fallback_model: str | None = None,
-) -> str | dict[str, Any]:
-    """Run full council deliberation: blind → debate → judge → critique.
-
-    Returns the synthesis as text, or a structured result for JSON or judge failure.
-    """
+) -> dict[str, Any]:
+    """Run blind → debate → judge → critique and return all completed phases."""
     import sys
 
     if json_output:
@@ -168,7 +166,7 @@ async def run_council(
     critique_fallback = critic_fallback_model or resolved_critique_fallback()
     run_models = parallel_runner or run_parallel
     run_model = model_runner or _query_single
-    run_judge = judge_runner or query_judge
+    run_judge = terminal.guard_judge_route(judge_runner or query_judge)
 
     full_question = f"{context}\n\n{question}" if context else question
     start = time.monotonic()
@@ -183,11 +181,11 @@ async def run_council(
         models, blind_messages, max_tokens=1024, timeout=timeout, effort=effort
     )
 
-    blind_claims: dict[str, str] = {}
+    blind_seats = {row.name: row for row in blind_results if not row.is_error}
+    blind_claims = {name: row.response for name, row in blind_seats.items()}
     blind_json: list[dict[str, Any]] = []
     for mcr in blind_results:
         if not mcr.is_error:
-            blind_claims[mcr.name] = mcr.response
             blind_json.append(mcr.to_dict())
             console.print(
                 Panel(Markdown(mcr.response), title=f"[bold]{mcr.name}[/bold]", border_style="dim")
@@ -226,10 +224,9 @@ async def run_council(
                 total_duration_s=time.monotonic() - start,
             )
         )
-        if json_output:
-            result["error"] = message
-            return result
-        return ""
+        result["terminal"] = terminal.failed("blind", "no_quorum")
+        result["error"] = message
+        return result
 
     # --- BLIND DIVERGENCE ---
     # Scored here, between blind and debate, because after the debate any
@@ -247,8 +244,8 @@ async def run_council(
             divergence = parse_divergence(raw, list(blind_claims))
         if divergence:
             console.print(f"[dim]{format_divergence(divergence)}[/dim]")
+            result["divergence"] = divergence
             if json_output:
-                result["divergence"] = divergence
                 stream_event("divergence", divergence)
         else:
             # An instrument that fails must not take the deliberation with it.
@@ -287,14 +284,16 @@ async def run_council(
                 Message.user(f"{context_block}\n\nOriginal question: {full_question}"),
             ]
 
-            # Query this speaker sequentially (debate is sequential).
-            mcr = await run_model(
-                entry,
-                msgs,
-                max_tokens=2048,
-                timeout=timeout,
-                effort=effort,
-            )
+            try:
+                mcr = await run_model(entry, msgs, max_tokens=2048, timeout=timeout, effort=effort)
+            except Exception:
+                mcr = ModelCallResult(
+                    name=entry.name,
+                    model_id=blind_seats[entry.name].model_id,
+                    response="[Error: debate route failed]",
+                    provider="exception",
+                    diagnostics=("orchestrator:exception",),
+                )
             debate_results.append(mcr)
 
             entry_dict = mcr.to_dict()
@@ -363,6 +362,7 @@ async def run_council(
         judge_used = judge_fallback
 
     if is_error(judge_response):
+        result["terminal"] = terminal.failed("judge", "synthesis_failed")
         result["failed_phase"] = "judge"
         result["error"] = "Council judge synthesis failed"
         result["phases"]["judge"] = {"model": judge_used, "error": "synthesis_failed"}
@@ -394,8 +394,8 @@ async def run_council(
     if shuffle_seed is not None:
         judge_data["shuffle_seed"] = shuffle_seed
         judge_data["trace_order"] = trace_order
+    result["phases"]["judge"] = judge_data
     if json_output:
-        result["phases"]["judge"] = judge_data
         stream_event("judge", judge_data)
 
     # --- CRITIQUE ---
@@ -432,8 +432,8 @@ async def run_council(
             critique_data = {"model": str(critique_used), "response": critique_response}
             if critique_used != critique:
                 critique_data["preferred_model"] = critique
+            result["phases"]["critique"] = critique_data
             if json_output:
-                result["phases"]["critique"] = critique_data
                 stream_event("critique", critique_data)
 
     duration = time.monotonic() - start
@@ -443,8 +443,11 @@ async def run_council(
             f"\n[bold red]⚠ Partial council: {len(blind_failed)}/{len(blind_results)} models failed"
             f" ({names})[/bold red]"
         )
-    k3_present = _has_successful_k3(blind_results)
-    outcome, decision_value, k3_effect = runlog.prompt_outcome(k3_present=k3_present)
+    outcome = decision_value = k3_effect = None
+    if not json_output:
+        outcome, decision_value, k3_effect = runlog.prompt_outcome(
+            k3_present=_has_successful_k3(blind_results)
+        )
     record = runlog.build_record(
         mode="council",
         results=blind_results,
@@ -467,8 +470,8 @@ async def run_council(
         console.print(f"[dim]{line}[/dim]")
     console.print(f"[dim]{summary}[/dim]")
 
-    if json_output:
-        result["duration_s"] = round(duration, 1)
-        return result
-
-    return judge_response
+    result["duration_s"] = round(duration, 1)
+    result["terminal"] = terminal.finished(
+        missing_contributions=bool(blind_failed) or any(row.is_error for row in debate_results)
+    )
+    return result

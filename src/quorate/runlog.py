@@ -109,6 +109,60 @@ def split_cost(result: ModelCallResult) -> tuple[float, float]:
     return in_cost, out_cost
 
 
+def _durable_divergence(score: dict | None, models: list[dict]) -> dict | None:
+    """Project a live grouping to seat IDs, only for an exact, scored partition."""
+    if not isinstance(score, dict) or not isinstance(models, list):
+        return None
+    groups = score.get("positions")
+    if not isinstance(groups, list) or not groups:
+        return None
+
+    aliases: dict[str, str] = {}
+    seats: set[str] = set()
+    for row in models:
+        if not isinstance(row, dict):
+            return None
+        if row.get("ok") is not True:
+            continue
+        name, seat_id = row.get("name"), row.get("model_id")
+        if not isinstance(seat_id, str) or not seat_id or seat_id in seats:
+            return None
+        seats.add(seat_id)
+        for key in (name, seat_id):
+            if not isinstance(key, str) or not key or aliases.setdefault(key, seat_id) != seat_id:
+                return None
+
+    seen: set[str] = set()
+    positions = []
+    for group in groups:
+        members = group.get("members") if isinstance(group, dict) else None
+        if not isinstance(members, list) or not members:
+            return None
+        ids = []
+        for name in members:
+            if not isinstance(name, str) or name not in aliases:
+                return None
+            seat_id = aliases[name]
+            if seat_id in seen:
+                return None
+            ids.append(seat_id)
+            seen.add(seat_id)
+        positions.append({"members": ids})
+    if seen != seats:
+        return None
+
+    largest = max(len(p["members"]) for p in positions)
+    counts = {"distinct_positions": len(groups), "largest_bloc": largest, "panel_size": len(seats)}
+    if any(type(score.get(key)) is not int or score[key] != value for key, value in counts.items()):
+        return None
+    # Equality to the computed, bounded index also excludes NaN, infinity and
+    # oversized integers, without coercing untrusted values to float.
+    expected = round(100 * (1 - largest / len(seats)), 1)
+    if type(score.get("index")) not in (int, float) or score["index"] != expected:
+        return None
+    return {"index": expected, **counts, "positions": positions}
+
+
 @dataclass
 class RunRecord:
     """One quorate run, serialised to JSONL."""
@@ -141,7 +195,7 @@ class RunRecord:
             "outcome": self.outcome,
             "decision_value": self.decision_value,
             "k3_effect": self.k3_effect,
-            "divergence": self.divergence,
+            "divergence": _durable_divergence(self.divergence, self.models),
         }
 
 
@@ -310,7 +364,7 @@ def _divergence_summary(records: Iterable[dict]) -> dict:
         if not isinstance(divergence, dict):
             continue
         index = divergence.get("index")
-        if not isinstance(index, int | float) or isinstance(index, bool):
+        if type(index) not in (int, float) or not 0 <= index <= 100:
             continue
         indices.append(float(index))
         distinct = divergence.get("distinct_positions")

@@ -25,6 +25,7 @@ from quorate.config import (
     resolved_judge,
     resolved_judge_fallback,
 )
+from quorate.modes import terminal
 
 BRAINSTORM_LENSES: tuple[tuple[str, str], ...] = (
     (
@@ -176,15 +177,15 @@ async def run_brainstorm(
     judge_runner: Callable[..., Awaitable[str]] | None = None,
     curator_model: str | None = None,
     curator_fallback_model: str | None = None,
-) -> str | dict[str, Any]:
+) -> dict[str, Any]:
     """Generate independently, cross-pollinate once, and curate a shortlist."""
-    console = console or Console()
+    console = console or Console(quiet=json_output)
     models = models or brainstorm_models()
     full_question = f"{context}\n\n{question}" if context else question
     start = time.monotonic()
     lenses = [BRAINSTORM_LENSES[index % len(BRAINSTORM_LENSES)] for index in range(len(models))]
     run_prompt_round = prompt_round_runner or _run_prompt_round
-    run_judge = judge_runner or query_judge
+    run_judge = terminal.guard_judge_route(judge_runner or query_judge)
 
     console.print("\n[bold cyan]INDEPENDENT GENERATION[/bold cyan]")
     seed_prompts = [
@@ -212,6 +213,15 @@ async def run_brainstorm(
             stream_event("generation", row)
 
     success_count, quorum_target, quorum_achieved = quorum_health(seed_results)
+    phases: dict[str, Any] = {"generation": seed_json}
+    report: dict[str, Any] = {
+        "question": question,
+        "phases": phases,
+        "success_count": success_count,
+        "failed_count": len(seed_results) - success_count,
+        "quorum_target": quorum_target,
+        "quorum_achieved": quorum_achieved,
+    }
     if not quorum_achieved:
         duration = time.monotonic() - start
         runlog.append(
@@ -221,16 +231,9 @@ async def run_brainstorm(
                 total_duration_s=duration,
             )
         )
-        result: dict[str, Any] = {
-            "question": question,
-            "phases": {"generation": seed_json},
-            "success_count": success_count,
-            "failed_count": len(seed_results) - success_count,
-            "quorum_target": quorum_target,
-            "quorum_achieved": False,
-            "duration_s": round(duration, 1),
-        }
-        return result if json_output else ""
+        report["duration_s"] = round(duration, 1)
+        report["terminal"] = terminal.failed("generation", "no_quorum")
+        return report
 
     successful = [
         (entry, result, lens)
@@ -273,6 +276,7 @@ async def run_brainstorm(
         if json_output:
             stream_event("cross_pollination", row)
 
+    phases["cross_pollination"] = cross_json
     traces = []
     for entry, seed, (lens, _instruction) in successful:
         traces.append(f"### {entry.name} · {lens} · seed\n{seed.response}")
@@ -319,22 +323,11 @@ async def run_brainstorm(
                 judge_model=curator_used,
             )
         )
-        if json_output:
-            return {
-                "question": question,
-                "error": "Brainstorm curation failed its output contract",
-                "phases": {
-                    "generation": seed_json,
-                    "cross_pollination": cross_json,
-                    "curation": {"model": curator_used, "error": curated},
-                },
-                "success_count": success_count,
-                "failed_count": len(seed_results) - success_count,
-                "quorum_target": quorum_target,
-                "quorum_achieved": True,
-                "duration_s": round(duration, 1),
-            }
-        return ""
+        phases["curation"] = {"model": curator_used, "error": curated}
+        report["duration_s"] = round(duration, 1)
+        report["error"] = "Brainstorm curation failed its output contract"
+        report["terminal"] = terminal.failed("curation", "curation_failed")
+        return report
 
     console.print(Panel(Markdown(curated), title="[bold green]Curator[/bold green]"))
     curator_data: dict[str, Any] = {"model": curator_used, "response": curated}
@@ -362,18 +355,10 @@ async def run_brainstorm(
         console.print(f"[dim]{line}[/dim]")
     console.print(f"[dim]{summary}[/dim]")
 
-    if json_output:
-        return {
-            "question": question,
-            "phases": {
-                "generation": seed_json,
-                "cross_pollination": cross_json,
-                "curation": curator_data,
-            },
-            "success_count": success_count,
-            "failed_count": len(seed_results) - success_count,
-            "quorum_target": quorum_target,
-            "quorum_achieved": True,
-            "duration_s": round(duration, 1),
-        }
-    return curated
+    phases["curation"] = curator_data
+    report["duration_s"] = round(duration, 1)
+    report["terminal"] = terminal.finished(
+        missing_contributions=success_count < len(seed_results)
+        or any(r.is_error for r in cross_results)
+    )
+    return report
